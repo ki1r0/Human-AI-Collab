@@ -1,0 +1,28 @@
+#usda 1.0
+(
+    defaultPrim = "Franka"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "Franka"
+{
+    custom token fallback_kind = "mock_franka"
+    def Camera "head_camera"
+    {
+        double3 xformOp:translate = (0.0, 0.0, 1.35)
+        double3 xformOp:rotateXYZ = (-15.0, 0.0, 180.0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
+        float horizontalAperture = 20.955
+        float verticalAperture = 15.2908
+        float focalLength = 18
+        token projection = "perspective"
+    }
+    def Cube "mock_base"
+    {
+        double size = 0.45
+        double3 xformOp:translate = (0.0, 0.0, 0.225)
+        double3 xformOp:scale = (0.6, 0.6, 1.0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+    }
+}

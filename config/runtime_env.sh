@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Runtime environment for Human-AI-Collab.
+# Source this file before launching, then set COMMANDER_API_KEY separately or use config/runtime_env.local.sh.
+
+export COMMANDER_LLM_MODEL="${COMMANDER_LLM_MODEL:-gemini-2.5-flash}"
+export COMMANDER_API_KEY="${COMMANDER_API_KEY:-}"
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
+export COSMOS_BASE_URL="${COSMOS_BASE_URL:-}"
+export COSMOS_CHAT_COMPLETIONS_URL="${COSMOS_CHAT_COMPLETIONS_URL:-}"
+export COSMOS_MODEL="${COSMOS_MODEL:-/models/Cosmos-Reason2-8B}"
+export COSMOS_API_KEY="${COSMOS_API_KEY:-}"
+export COSMOS_TIMEOUT="${COSMOS_TIMEOUT:-60}"
+export HAC_PREFER_LOCAL_SCENE_ASSETS="${HAC_PREFER_LOCAL_SCENE_ASSETS:-1}"
+export HAC_AUTO_DOWNLOAD_SCENE_ASSETS="${HAC_AUTO_DOWNLOAD_SCENE_ASSETS:-0}"
+export HAC_ENABLE_ROOM_SHELL_FALLBACK="${HAC_ENABLE_ROOM_SHELL_FALLBACK:-0}"
+export MEM0_API_KEY="${MEM0_API_KEY:-}"

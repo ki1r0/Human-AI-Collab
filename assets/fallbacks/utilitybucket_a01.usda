@@ -1,0 +1,18 @@
+#usda 1.0
+(
+    defaultPrim = "utilitybucket_a01"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "utilitybucket_a01"
+{
+    def Cylinder "body"
+    {
+        double radius = 0.18
+        double height = 0.3
+        token axis = "Z"
+        double3 xformOp:translate = (0, 0, 0.15)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+}

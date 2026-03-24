@@ -1,0 +1,6 @@
+langgraph
+langchain-core
+mem0ai
+numpy
+pillow
+pydantic>=2

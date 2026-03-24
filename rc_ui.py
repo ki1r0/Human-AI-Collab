@@ -8,13 +8,17 @@ import threading
 import time
 from typing import Any, Dict, List
 
+import numpy as np
 import omni.kit.app
 import omni.timeline
 import omni.ui as ui
 
-from rc_belief_manager import BeliefManager
-from rc_camera import capture_rgb_uint8_async, init_camera, save_last_frame, save_sent_frames
-from rc_cognitive_worker import cognitive_worker
+from belief import BeliefManager, GhostVisualizer
+from sensor import capture_rgb_uint8_async, get_latest_rgb_uint8, init_camera, save_last_frame, save_sent_frames
+from sensor import cosmos_endpoint, test_cosmos_connection, StateMonitor
+from agent import cognitive_worker
+from control import FrankaControlPolicy
+from memory import LongTermMemory, ShortTermMemory
 from rc_config import (
     CAPTURE_FPS,
     COSMOS_MODEL,
@@ -25,14 +29,32 @@ from rc_config import (
     STREAM_DEFAULT_PROMPT,
     TIMEOUT_SEC,
 )
-from rc_franka_control import FrankaControlPolicy
-from rc_ghost_visualizer import GhostVisualizer
-from rc_perception import StateMonitor
 from rc_log import log_error, log_info, log_line, log_warn, render_log
-from rc_long_term_memory import LongTermMemory
-from rc_short_term_memory import ShortTermMemory
+from rc_paths import asset_browser_cache_dir
 from rc_state import STATE
-from rc_vlm import cosmos_endpoint, test_cosmos_connection
+
+
+def _get_task_loop() -> asyncio.AbstractEventLoop:
+    """Return an asyncio loop suitable for scheduling background tasks in Kit.
+
+    Compatibility note: some Kit builds expose `IApp.get_async_loop()`, others do not.
+    """
+    try:
+        return asyncio.get_running_loop()
+    except RuntimeError:
+        pass
+    try:
+        return asyncio.get_event_loop()
+    except RuntimeError:
+        pass
+    try:
+        app = omni.kit.app.get_app()
+        get_async_loop = getattr(app, "get_async_loop", None)
+        if callable(get_async_loop):
+            return get_async_loop()
+    except Exception:
+        pass
+    raise RuntimeError("No available asyncio loop for scheduling task.")
 
 
 def _get_recent_frames(last_seconds: float, max_frames: int) -> List[Any]:
@@ -66,6 +88,91 @@ def _get_recent_frames(last_seconds: float, max_frames: int) -> List[Any]:
             seen.add(idx)
             dedup.append(idx)
     return [recent_items[i][1] for i in dedup]
+
+
+def _clone_frame(frame: Any) -> Any:
+    try:
+        return frame.copy()
+    except Exception:
+        return frame
+
+
+def _get_latest_buffer_frames(max_frames: int) -> List[Any]:
+    """Return latest frames from buffer without a recency cutoff (oldest->newest)."""
+    if not STATE.frame_buffer:
+        return []
+    max_frames = max(1, int(max_frames))
+    items = list(STATE.frame_buffer)
+    picked = items[-max_frames:]
+    return [_clone_frame(rgb) for _ts, rgb in picked]
+
+
+def _canon_name(name: str) -> str:
+    return "".join(ch for ch in str(name or "").lower() if ch.isalnum())
+
+
+def _collect_gt_interactable_names(max_names: int = 64) -> List[str]:
+    """Collect interactable names from GT state monitor for initialization form."""
+    names: List[str] = []
+    sm = STATE.state_monitor
+    if sm is None:
+        return names
+
+    try:
+        poses = sm.get_current_poses()
+        if isinstance(poses, dict) and poses:
+            for pose in poses.values():
+                n = str(getattr(pose, "name", "") or "").strip()
+                if n:
+                    names.append(n)
+    except Exception:
+        pass
+
+    if not names:
+        try:
+            discovered = sm.auto_discover_objects()
+            if discovered:
+                sm.set_tracked_prims(discovered)
+                for prim_path in discovered:
+                    n = str(prim_path or "").rstrip("/").split("/")[-1].strip()
+                    if n:
+                        names.append(n)
+        except Exception:
+            pass
+
+    if not names:
+        for prim_path in list(getattr(sm, "_tracked_paths", []) or []):
+            n = str(prim_path or "").rstrip("/").split("/")[-1].strip()
+            if n:
+                names.append(n)
+
+    deduped: List[str] = []
+    seen = set()
+    for n in names:
+        c = _canon_name(n)
+        if not c or c in seen:
+            continue
+        seen.add(c)
+        deduped.append(n)
+        if len(deduped) >= max(1, int(max_names)):
+            break
+    return deduped
+
+
+def _build_init_interactable_form(interactable_names: List[str]) -> Dict[str, Any]:
+    objects: Dict[str, Any] = {}
+    for name in list(interactable_names or []):
+        key = str(name or "").strip()
+        if not key:
+            continue
+        # Empty per-object form; model fills fields.
+        objects[key] = {}
+    return {
+        "belief_state_update": {"objects": objects, "static_context": {}},
+        "stm_observation": "",
+        "reply": "",
+        "action": {"type": "noop", "args": {}},
+    }
 
 
 def _get_frames_since(last_ts: float, max_frames: int) -> tuple[List[Any], float]:
@@ -122,12 +229,84 @@ def _log_long(prefix: str, text: str, chunk: int = 400) -> None:
         log_line(prefix, text[i : i + int(chunk)])
 
 
+def _extract_reply_text(text: str) -> str:
+    """Best-effort extraction of `reply` from JSON-looking model output."""
+    s = str(text or "").strip()
+    if not s:
+        return ""
+    if s.startswith("{"):
+        try:
+            payload = json.loads(s)
+            if isinstance(payload, dict):
+                r = str(payload.get("reply") or "").strip()
+                if r:
+                    return r
+        except Exception:
+            pass
+    return s
+
+
+def _update_vlm_status(status: str, detail: str = "") -> None:
+    """Update the VLM occupancy indicator in the UI and log."""
+    label = STATE.vlm_status_label
+    if label is None:
+        return
+    try:
+        if status == "idle":
+            label.text = "VLM: Idle"
+            label.set_style({"color": 0xFF00CC00})  # green
+        elif status == "busy":
+            trigger = detail or STATE.vlm_busy_trigger or "auto"
+            if trigger == "user":
+                label.text = "VLM: Processing your question..."
+                label.set_style({"color": 0xFF00AAFF})  # blue
+            elif trigger == "grounding":
+                label.text = "VLM: Grounding..."
+                label.set_style({"color": 0xFFFFAA00})  # orange
+            else:
+                label.text = f"VLM: Busy ({trigger})"
+                label.set_style({"color": 0xFFFF4444})  # red
+        elif status == "queued":
+            label.text = "VLM: Queued"
+            label.set_style({"color": 0xFFFFCC00})  # yellow
+    except Exception:
+        pass
+
+
+def _has_pending_inference() -> bool:
+    """True when there is an in-flight or queued model request."""
+    if bool(getattr(STATE, "vlm_busy", False)):
+        return True
+    q = getattr(STATE, "worker_in_q", None)
+    if q is not None:
+        try:
+            if not q.empty():
+                return True
+        except Exception:
+            pass
+    return False
+
+
+def _sync_vlm_status_indicator() -> None:
+    """Keep UI indicator consistent with queue/in-flight state."""
+    if STATE.manual_pending:
+        _update_vlm_status("busy", "user")
+        return
+    if _has_pending_inference():
+        _update_vlm_status("busy", STATE.vlm_busy_trigger or "auto")
+        return
+    _update_vlm_status("idle")
+
+
 def _compact_belief_from_snapshot(snapshot: Dict[str, Any]) -> str:
     """Render a compact belief summary directly from belief snapshot."""
     if not isinstance(snapshot, dict):
         return "no objects tracked"
     objects = snapshot.get("objects")
+    static_context = snapshot.get("static_context")
     if not isinstance(objects, dict) or not objects:
+        if isinstance(static_context, dict) and static_context:
+            return f"no objects tracked | background={len(static_context)}"
         return "no objects tracked"
     parts: List[str] = []
     for name, obj in objects.items():
@@ -149,7 +328,11 @@ def _compact_belief_from_snapshot(snapshot: Dict[str, Any]) -> str:
                 pass
         parts.append(s)
     if not parts:
+        if isinstance(static_context, dict) and static_context:
+            return f"no objects tracked | background={len(static_context)}"
         return "no objects tracked"
+    if isinstance(static_context, dict) and static_context:
+        parts.append(f"background={len(static_context)}")
     return " | ".join(parts)[:600]
 
 
@@ -179,7 +362,7 @@ def _configure_quiet_kit_logging() -> None:
 def _ensure_asset_browser_cache_dir() -> None:
     """Prevent noisy FileNotFoundError from isaacsim.asset.browser cache writes in some container layouts."""
     try:
-        cache_dir = "/workspace/isaacsim/_build/linux-x86_64/release/exts/isaacsim.asset.browser/cache"
+        cache_dir = str(asset_browser_cache_dir())
         os.makedirs(cache_dir, exist_ok=True)
         cache_file = os.path.join(cache_dir, "isaacsim.asset.browser.cache.json")
         if not os.path.exists(cache_file):
@@ -192,6 +375,7 @@ def _ensure_asset_browser_cache_dir() -> None:
 
 def _init_pipeline_once() -> None:
     """Initialize cognition + memory + (optional) robot control once per session."""
+    print(f"[PIPELINE] _init_pipeline_once() called", flush=True)
     # Recreate LTM/worker when Mem0 key changes (common during interactive tuning).
     mem0_fp = (str(MEM0_API_KEY or "").strip() or "none")[-8:]
     need_worker_restart = False
@@ -203,7 +387,7 @@ def _init_pipeline_once() -> None:
             log_line("INFO ", "Mem0 key change detected; reinitializing long-term memory.")
 
     if STATE.belief_manager is None:
-        STATE.belief_manager = BeliefManager(initial_state={"objects": {}})
+        STATE.belief_manager = BeliefManager(initial_state={"objects": {}, "static_context": {}})
         log_line("INFO ", "BeliefManager initialized.")
 
     if STATE.short_memory is None:
@@ -221,6 +405,32 @@ def _init_pipeline_once() -> None:
     if STATE.robot_controller is None:
         # Safe to create even when no Franka is present; it self-disables and logs.
         STATE.robot_controller = FrankaControlPolicy(logger=lambda m: log_line("INFO ", m))
+
+    if STATE.magic_assembly is None:
+        from rc_magic_assembly import MagicAssemblyManager
+        STATE.magic_assembly = MagicAssemblyManager(logger=lambda m: log_line("INFO ", m))
+        try:
+            created = STATE.magic_assembly.ensure_extra_hub_bolt_assets()
+            if created.get("bolts", 0) or created.get("sockets", 0):
+                log_line(
+                    "INFO ",
+                    "Extra hub-bolt assets ensured "
+                    f"(bolts={created.get('bolts', 0)}, sockets={created.get('sockets', 0)})",
+                )
+        except Exception as exc:
+            log_line("WARN ", f"Failed to ensure extra hub-bolt assets: {exc}")
+        try:
+            created = STATE.magic_assembly.ensure_case_attachment_assets()
+            if any(created.values()):
+                log_line(
+                    "INFO ",
+                    "Case assets ensured "
+                    f"(bolts={created.get('bolts', 0)}, oils={created.get('oils', 0)}, "
+                    f"top_sockets={created.get('top_sockets', 0)}, "
+                    f"base_alias_sockets={created.get('base_alias_sockets', 0)})",
+                )
+        except Exception as exc:
+            log_line("WARN ", f"Failed to ensure case attachment assets: {exc}")
 
     if STATE.state_monitor is None:
         from rc_config import GT_TRACKED_PRIMS, GT_POSITION_THRESHOLD, GT_ORIENTATION_THRESHOLD, GT_COOLDOWN_SEC
@@ -269,10 +479,7 @@ def _init_pipeline_once() -> None:
         log_line("INFO ", "Cognitive worker thread started.")
 
     if STATE.worker_poll_task is None:
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = omni.kit.app.get_app().get_async_loop()
+        loop = _get_task_loop()
         STATE.worker_poll_task = loop.create_task(_worker_poll_loop())
 
 
@@ -321,23 +528,56 @@ def _clear_worker_input_queue() -> None:
 
 def _enqueue_inference(*, frames: List[Any], user_text: str, trigger: Dict[str, Any], force: bool) -> bool:
     """Queue an inference request to the worker (never blocks the Kit thread)."""
+    print(f"[ENQUEUE] _enqueue_inference(frames={len(frames) if frames else 0}, trigger={trigger}, force={force})", flush=True)
     _init_pipeline_once()
     if STATE.worker_in_q is None:
+        print(f"[ENQUEUE] worker_in_q is None, returning False", flush=True)
         return False
 
     now = time.time()
     trigger_type = str((trigger or {}).get("type") or "auto")
 
+    # Drop malformed frame placeholders (None / wrong shape) before request packing.
+    valid_frames: List[Any] = []
+    dropped = 0
+    for frame in list(frames or []):
+        try:
+            arr = np.asarray(frame)
+            if arr.ndim == 3 and arr.size > 0:
+                valid_frames.append(_clone_frame(arr))
+            else:
+                dropped += 1
+        except Exception:
+            dropped += 1
+    if dropped:
+        log_line("WARN ", f"Dropped {dropped} invalid frame(s) before enqueue.")
+
     # Backpressure: while one request is in-flight, drop auto heartbeats.
-    # Manual/user requests still pass through.
+    # Manual/user requests bypass this when force=True (they preempt queued auto requests).
     if (not force) and STATE.vlm_busy and trigger_type != "user":
         return False
 
-    if (not force) and trigger_type != "after_reply" and (
-        now - float(STATE.last_infer_time or 0.0) < float(MIN_INFER_INTERVAL_SEC)
-    ):
+    # Rate-limit all non-forced triggers to prevent burst firing.
+    # User triggers (force=True) bypass this entirely.
+    if (not force) and (now - float(STATE.last_infer_time or 0.0) < float(MIN_INFER_INTERVAL_SEC)):
         return False
     STATE.last_infer_time = now
+
+    # GT-change inquiries must include a full post-trigger frame packet.
+    # Runtime contract: dispatch once 5 post-change frames are collected.
+    if trigger_type == "gt_change" and len(valid_frames) < 5:
+        print(f"[ENQUEUE] WARN: insufficient gt_change frames={len(valid_frames)}", flush=True)
+        log_line("WARN ", "GT trigger requires 5 valid frames — deferring.")
+        return False
+
+    # Zero-frame guard.
+    if not valid_frames:
+        print(f"[ENQUEUE] WARN: 0 frames for trigger={trigger_type}!", flush=True)
+        if trigger_type == "grounding":
+            log_line("ERR  ", "Grounding aborted: no valid frame was captured.")
+            return False
+        # user/manual requests may still run text-only from belief+memory.
+        log_line("WARN ", f"0 frames in {trigger_type} request — model will answer from belief only.")
 
     # Get current GT state from StateMonitor
     gt_state = {}
@@ -357,15 +597,6 @@ def _enqueue_inference(*, frames: List[Any], user_text: str, trigger: Dict[str, 
         except Exception as exc:
             log_line("WARN ", f"Failed to get GT state: {exc}")
 
-    req = {
-        "frames": list(frames or []),
-        "user_text": str(user_text or ""),
-        "trigger": dict(trigger or {}),
-        "gt_state": gt_state,
-        "ts": now
-    }
-    req["run_id"] = int(STATE.run_id)
-
     # Log GT state for debugging
     gt_obj_names = list(gt_state.get("ground_truth_objects", {}).keys()) if gt_state else []
     if gt_obj_names:
@@ -373,17 +604,42 @@ def _enqueue_inference(*, frames: List[Any], user_text: str, trigger: Dict[str, 
     else:
         log_line("INFO ", "GT state: empty (StateMonitor has no tracked objects)")
 
+    # Include the full current GT interactable set in gt_change triggers so the
+    # model can reason over all tracked objects, not only changed_objects.
+    trigger_payload = dict(trigger or {})
+    if trigger_type == "gt_change":
+        all_interactables = list(gt_obj_names)
+        if not all_interactables:
+            try:
+                snap = STATE.belief_manager.get_snapshot() if STATE.belief_manager else {}
+                if isinstance(snap, dict):
+                    all_interactables = [str(k) for k in (snap.get("objects") or {}).keys()]
+            except Exception:
+                all_interactables = []
+        if all_interactables:
+            trigger_payload["all_interactables"] = all_interactables
+
+    req = {
+        "frames": valid_frames,
+        "user_text": str(user_text or ""),
+        "trigger": trigger_payload,
+        "gt_state": gt_state,
+        "ts": now
+    }
+    req["run_id"] = int(STATE.run_id)
+
     _queue_put_latest(STATE.worker_in_q, req)
     STATE.vlm_busy = True
     STATE.vlm_busy_since = now
+    STATE.vlm_busy_trigger = trigger_type
 
     t = trigger_type
     if t == "user":
         log_line("INFO ", f"Manual: queued for model (images={len(req['frames'])})")
-        log_line("AI   ", "🤔 Model is thinking...")
+        _update_vlm_status("busy", "user")
     else:
         log_line("INFO ", f"Auto: queued for model (trigger={t}, images={len(req['frames'])})")
-        log_line("AI   ", "🤔 Processing...")
+        _update_vlm_status("busy", t)
     return True
 
 
@@ -415,83 +671,598 @@ def on_save_frame() -> None:
 def on_initiate_cosmos() -> None:
     """Pre-simulation grounding: capture static frame and initialize belief state with semantic object names."""
     try:
-        log_line("INFO ", "═══ Initiating Cosmos Grounding ═══")
-        _init_pipeline_once()
+        # Prevent duplicate initialization requests while one is in-flight.
+        if getattr(STATE, "grounding_in_progress", False):
+            log_line("WARN ", "Grounding already in progress.")
+            return
+        if _has_pending_inference() and str(getattr(STATE, "vlm_busy_trigger", "") or "") == "grounding":
+            log_line("WARN ", "Grounding request already queued.")
+            return
 
-        # Capture a single static frame
+        log_line("INFO ", "Initiating Cosmos Grounding...")
+        STATE.grounding_complete = False
+        STATE.grounding_in_progress = True
+        _update_vlm_status("busy", "grounding")
+        if STATE.init_status_label is not None:
+            try:
+                STATE.init_status_label.text = "Initializing..."
+                STATE.init_status_label.set_style({"color": 0xFFFFAA00})  # amber
+            except Exception:
+                pass
+
+        # Acquire a single static frame for grounding.
         async def _capture_and_ground():
             try:
-                from rc_camera import capture_rgb_uint8_async
-                rgb = await capture_rgb_uint8_async()
-                log_line("INFO ", "✓ Static frame captured for grounding")
+                import numpy as np
+                _init_pipeline_once()
 
-                # Build grounding prompt
+                rgb = None
+
+                # Fast path 1: ring buffer already has frames (PLAY is running or was running).
+                if STATE.frame_buffer:
+                    items = list(STATE.frame_buffer)
+                    rgb = _clone_frame(items[-1][1])
+                    log_line("INFO ", "Grounding: using latest buffered frame.")
+
+                # Fast path 2: a frame was previously captured (e.g. after Init Camera click).
+                elif STATE.last_rgb is not None:
+                    rgb = _clone_frame(STATE.last_rgb)
+                    log_line("INFO ", "Grounding: using last captured frame (STATE.last_rgb).")
+
+                # Slow path: capture a static frame before PLAY.
+                # Run a bounded retry loop to avoid long hangs before PLAY.
+                # Each capture attempt is timeout-limited; between attempts we let
+                # the Kit loop advance so the renderer can warm up.
+                else:
+                    log_line("INFO ", "Grounding: no buffered frames — capturing pre-PLAY static frame...")
+                    from sensor import capture_rgb_uint8_async
+
+                    def _is_valid_frame(_rgb: Any) -> bool:
+                        return bool(
+                            _rgb is not None
+                            and isinstance(_rgb, np.ndarray)
+                            and _rgb.ndim == 3
+                            and _rgb.size > 0
+                            and int(np.max(_rgb)) > 1
+                        )
+
+                    max_attempts = 4
+                    for attempt in range(1, max_attempts + 1):
+                        try:
+                            candidate = await asyncio.wait_for(capture_rgb_uint8_async(), timeout=10.0)
+                        except asyncio.TimeoutError:
+                            log_line("WARN ", f"Grounding capture attempt {attempt}/{max_attempts} timed out.")
+                            candidate = None
+                        except Exception as exc:
+                            log_line("WARN ", f"Grounding capture attempt {attempt}/{max_attempts} failed: {exc}")
+                            candidate = None
+
+                        if _is_valid_frame(candidate):
+                            rgb = candidate
+                            log_line("INFO ", f"Grounding capture succeeded on attempt {attempt}/{max_attempts}.")
+                            break
+
+                        # Fallback probe: latest annotator frame without Replicator step.
+                        try:
+                            probe = get_latest_rgb_uint8()
+                        except Exception:
+                            probe = None
+                        if _is_valid_frame(probe):
+                            rgb = _clone_frame(probe)
+                            log_line("INFO ", f"Grounding capture succeeded via latest-frame probe on attempt {attempt}/{max_attempts}.")
+                            break
+
+                        await omni.kit.app.get_app().next_update_async()
+
+                    if rgb is None:
+                        log_line("WARN ", "Grounding capture did not return a valid frame after retries.")
+
+                # Threshold > 1 (not > 10) so a legitimately dark/night scene is accepted.
+                frame_valid = (rgb is not None and isinstance(rgb, np.ndarray)
+                               and rgb.ndim == 3 and rgb.size > 0
+                               and np.max(rgb) > 1)
+                log_line("INFO ", f"Grounding frame: shape={getattr(rgb, 'shape', 'N/A')}, "
+                         f"max_pixel={int(np.max(rgb)) if frame_valid else 'N/A'}, valid={frame_valid}")
+                if not frame_valid:
+                    # Last-resort: the warm-up loop inside capture_rgb_uint8_async exhausted
+                    # its steps and still returned black (e.g. renderer not ready).  If there
+                    # is a cached frame from a prior capture, use it before failing hard.
+                    if STATE.last_rgb is not None and isinstance(STATE.last_rgb, np.ndarray):
+                        rgb = _clone_frame(STATE.last_rgb)
+                        frame_valid = bool(rgb.ndim == 3 and rgb.size > 0 and np.max(rgb) > 1)
+                        if frame_valid:
+                            log_line("INFO ", "Grounding fallback: using last cached non-black frame.")
+
+                if not frame_valid:
+                    log_line("ERR  ", "Grounding failed: no valid frame captured. Initialization aborted.")
+                    STATE.grounding_complete = False
+                    STATE.grounding_in_progress = False
+                    if STATE.init_status_label is not None:
+                        try:
+                            STATE.init_status_label.text = "Init failed (no frame)"
+                            STATE.init_status_label.set_style({"color": 0xFFCC4444})
+                        except Exception:
+                            pass
+                    _update_vlm_status("idle", "")
+                    return
+
+                # Build grounding prompt + prebuilt interactable form.
+                interactable_names = _collect_gt_interactable_names(max_names=96)
+                init_form = _build_init_interactable_form(interactable_names)
+                if interactable_names:
+                    log_line(
+                        "INFO ",
+                        f"Grounding interactables from GT ({len(interactable_names)}): {interactable_names[:12]}",
+                    )
+                else:
+                    log_line("WARN ", "Grounding: no GT interactables found; model will infer from frame.")
+
                 grounding_prompt = (
-                    "INITIALIZATION MODE: Analyze this static scene carefully.\n\n"
-                    "Your task is to identify ALL visible objects and create an initial belief state.\n\n"
-                    "CRITICAL REQUIREMENTS:\n"
-                    "1. Use SEMANTIC object names (e.g., 'orange', 'grey_basket', 'white_basket', 'table', 'cup')\n"
-                    "2. NEVER use generic IDs like 'object_1', 'object_2', etc.\n"
-                    "3. If you see multiple similar objects (e.g., two baskets), distinguish them by color or position\n"
-                    "   (e.g., 'grey_basket', 'white_basket' or 'left_basket', 'right_basket')\n"
-                    "4. For each object, provide:\n"
-                    "   - belief_status: 'visible' (since this is a static frame)\n"
-                    "   - confidence: your confidence level (0.0-1.0)\n"
-                    "   - visible: true\n"
-                    "   - temporal_change: 'initial_state'\n\n"
-                    "Expected objects in this scene:\n"
-                    "- An orange (fruit)\n"
-                    "- One or more baskets/containers\n"
-                    "- A table/surface\n"
-                    "- Any other visible objects\n\n"
-                    "Return JSON with the exact structure shown in previous examples, using meaningful object names."
+                    "INITIALIZATION MODE.\n"
+                    "Single-frame setup grounding before PLAY.\n"
+                    "Fill belief_state_update for all required interactable keys.\n"
+                    "Do not remove or rename provided object keys.\n"
+                    "Set temporal_change='initial_state'.\n"
+                    "Return strict JSON only.\n"
                 )
 
                 # Enqueue grounding inference
-                frames = [rgb]
-                _enqueue_inference(
+                frames = [_clone_frame(rgb)]
+                preplay_dir = _ensure_preplay_frames_dir()
+                try:
+                    paths = await asyncio.to_thread(save_sent_frames, "init_grounding", list(frames))
+                    if paths:
+                        log_line("INFO ", f"Grounding sent frame: {paths[0]}")
+                        log_line("INFO ", f"Grounding frames dir: {preplay_dir}")
+                except Exception as exc:
+                    log_warn(f"Failed to save grounding frame: {exc}")
+                queued = _enqueue_inference(
                     frames=frames,
                     user_text=grounding_prompt,
-                    trigger={"type": "grounding", "mode": "initialization"},
+                    trigger={
+                        "type": "grounding",
+                        "mode": "initialization",
+                        "init_interactables": list(interactable_names),
+                        "init_belief_form": init_form,
+                    },
                     force=True
                 )
 
-                # Mark that grounding was initiated
-                STATE.grounding_complete = False
-                STATE.grounding_in_progress = True
-                log_line("INFO ", "🧠 Grounding inference queued - VLM will identify objects...")
+                if queued:
+                    log_line("INFO ", f"Grounding inference queued (images={len(frames)}).")
+                else:
+                    log_line("WARN ", "Grounding inquiry could not be queued.")
+                    STATE.grounding_in_progress = False
+                    if STATE.init_status_label is not None:
+                        try:
+                            STATE.init_status_label.text = "Ready (no init)"
+                            STATE.init_status_label.set_style({"color": 0xFF888888})
+                        except Exception:
+                            pass
+                    _sync_vlm_status_indicator()
 
             except Exception as exc:
                 log_error(str(exc))
                 log_line("ERR  ", f"Grounding failed: {exc}")
+                STATE.grounding_in_progress = False
+                if STATE.init_status_label is not None:
+                    try:
+                        STATE.init_status_label.text = "Ready (no init)"
+                        STATE.init_status_label.set_style({"color": 0xFF888888})
+                    except Exception:
+                        pass
+                _sync_vlm_status_indicator()
 
-        # Run async capture
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = omni.kit.app.get_app().get_async_loop()
-        loop.create_task(_capture_and_ground())
+        # Schedule grounding on the Kit async loop (always use Kit's loop, not the
+        # Python default asyncio loop which may be a different, non-running loop).
+        task = _get_task_loop().create_task(_capture_and_ground())
+        setattr(STATE, "_grounding_task", task)
 
     except Exception as exc:
         log_error(str(exc))
         log_line("ERR  ", str(exc))
 
 
+def _diagnose_physics_scene() -> None:
+    """Check physics configuration and log diagnostics. Call after PLAY."""
+    try:
+        import omni.usd
+        from pxr import Usd, UsdGeom, UsdPhysics
+
+        stage = omni.usd.get_context().get_stage()
+        if stage is None:
+            print("[PHYS_DIAG] No USD stage loaded!", flush=True)
+            log_line("WARN ", "Physics diag: no USD stage loaded")
+            return
+
+        physics_scenes = []
+        dynamic_bodies = []
+        kinematic_bodies = []
+        colliders = []
+
+        for prim in stage.Traverse():
+            if not prim.IsValid():
+                continue
+            path_str = prim.GetPath().pathString
+
+            # Check for PhysicsScene
+            if prim.HasAPI(UsdPhysics.Scene) or prim.IsA(UsdPhysics.Scene):
+                physics_scenes.append(path_str)
+
+            # Check for rigid bodies
+            if prim.HasAPI(UsdPhysics.RigidBodyAPI):
+                rb = UsdPhysics.RigidBodyAPI(prim)
+                kinematic_attr = rb.GetKinematicEnabledAttr()
+                is_kinematic = False
+                if kinematic_attr and kinematic_attr.HasAuthoredValue():
+                    is_kinematic = bool(kinematic_attr.Get())
+                if is_kinematic:
+                    kinematic_bodies.append(path_str)
+                else:
+                    dynamic_bodies.append(path_str)
+
+            # Check for collision API
+            if prim.HasAPI(UsdPhysics.CollisionAPI):
+                colliders.append(path_str)
+
+        # Check for gravity in physics scenes
+        gravity_info = []
+        for scene_path in physics_scenes:
+            scene_prim = stage.GetPrimAtPath(scene_path)
+            if scene_prim:
+                try:
+                    scene_api = UsdPhysics.Scene(scene_prim)
+                    grav_attr = scene_api.GetGravityDirectionAttr()
+                    grav_mag_attr = scene_api.GetGravityMagnitudeAttr()
+                    grav_dir = grav_attr.Get() if grav_attr else "N/A"
+                    grav_mag = grav_mag_attr.Get() if grav_mag_attr else "N/A"
+                    gravity_info.append(f"{scene_path}: dir={grav_dir}, mag={grav_mag}")
+                except Exception as exc:
+                    gravity_info.append(f"{scene_path}: error reading gravity: {exc}")
+
+        tl = omni.timeline.get_timeline_interface()
+        time_now = tl.get_current_time()
+
+        print(f"[PHYS_DIAG] === Physics Scene Diagnostics ===", flush=True)
+        print(f"[PHYS_DIAG] PhysicsScene prims: {physics_scenes if physics_scenes else 'NONE FOUND!'}", flush=True)
+        print(f"[PHYS_DIAG] Gravity: {gravity_info if gravity_info else 'N/A (no physics scene)'}", flush=True)
+        print(f"[PHYS_DIAG] Dynamic rigid bodies ({len(dynamic_bodies)}): {dynamic_bodies[:15]}", flush=True)
+        print(f"[PHYS_DIAG] Kinematic rigid bodies ({len(kinematic_bodies)}): {kinematic_bodies[:15]}", flush=True)
+        print(f"[PHYS_DIAG] Collision prims: {len(colliders)}", flush=True)
+        print(f"[PHYS_DIAG] Timeline: playing={tl.is_playing()}, stopped={tl.is_stopped()}, time={time_now:.4f}s", flush=True)
+
+        log_line("INFO ", f"Physics: {len(physics_scenes)} scene(s), "
+                 f"{len(dynamic_bodies)} dynamic, {len(kinematic_bodies)} kinematic bodies")
+        if not physics_scenes:
+            log_line("WARN ", "NO PhysicsScene prim found! Physics will NOT step. "
+                     "Add a PhysicsScene to your USD stage.")
+        if not dynamic_bodies:
+            log_line("WARN ", "No dynamic rigid bodies found. Nothing will move under physics.")
+
+    except Exception as exc:
+        print(f"[PHYS_DIAG] Error: {exc}", flush=True)
+        log_line("WARN ", f"Physics diagnostics failed: {exc}")
+
+
+def _ensure_physics_scene_defaults() -> None:
+    """Repair obviously invalid PhysicsScene gravity values in-place.
+
+    Some stage variants show gravity as dir=(0,0,0), mag=-inf on first PLAY, which can lead
+    to a non-advancing simulation. This function only patches clearly invalid values.
+    """
+    try:
+        import math
+        import omni.usd
+        from pxr import Gf, UsdPhysics
+        try:
+            from pxr import PhysxSchema  # type: ignore
+        except Exception:
+            PhysxSchema = None
+
+        stage = omni.usd.get_context().get_stage()
+        if stage is None:
+            return
+
+        patched = 0
+        for prim in stage.Traverse():
+            if not prim.IsValid():
+                continue
+            if not (prim.HasAPI(UsdPhysics.Scene) or prim.IsA(UsdPhysics.Scene)):
+                continue
+
+            # Patch USD PhysicsScene attrs.
+            scene_api = UsdPhysics.Scene(prim)
+            dir_attr = scene_api.GetGravityDirectionAttr()
+            mag_attr = scene_api.GetGravityMagnitudeAttr()
+
+            cur_dir = dir_attr.Get() if dir_attr else None
+            cur_mag = mag_attr.Get() if mag_attr else None
+
+            dir_invalid = True
+            try:
+                if cur_dir is not None:
+                    n = float(cur_dir[0]) ** 2 + float(cur_dir[1]) ** 2 + float(cur_dir[2]) ** 2
+                    dir_invalid = n < 1e-8
+            except Exception:
+                dir_invalid = True
+
+            mag_invalid = True
+            try:
+                if cur_mag is not None:
+                    mag_f = float(cur_mag)
+                    mag_invalid = (not math.isfinite(mag_f)) or (mag_f <= 0.0)
+            except Exception:
+                mag_invalid = True
+
+            if dir_invalid and dir_attr:
+                dir_attr.Set(Gf.Vec3f(0.0, 0.0, -1.0))
+                patched += 1
+            if mag_invalid and mag_attr:
+                mag_attr.Set(9.81)
+                patched += 1
+
+            # Also patch PhysX scene API when present; some scenes read gravity from PhysX schema.
+            if PhysxSchema is not None:
+                try:
+                    if prim.HasAPI(PhysxSchema.PhysxSceneAPI):
+                        physx_api = PhysxSchema.PhysxSceneAPI(prim)
+                    else:
+                        physx_api = PhysxSchema.PhysxSceneAPI.Apply(prim)
+
+                    p_dir_attr = physx_api.GetGravityDirectionAttr()
+                    p_mag_attr = physx_api.GetGravityMagnitudeAttr()
+                    p_dir = p_dir_attr.Get() if p_dir_attr else None
+                    p_mag = p_mag_attr.Get() if p_mag_attr else None
+
+                    p_dir_invalid = True
+                    try:
+                        if p_dir is not None:
+                            pn = float(p_dir[0]) ** 2 + float(p_dir[1]) ** 2 + float(p_dir[2]) ** 2
+                            p_dir_invalid = pn < 1e-8
+                    except Exception:
+                        p_dir_invalid = True
+
+                    p_mag_invalid = True
+                    try:
+                        if p_mag is not None:
+                            pm = float(p_mag)
+                            p_mag_invalid = (not math.isfinite(pm)) or (pm <= 0.0)
+                    except Exception:
+                        p_mag_invalid = True
+
+                    if p_dir_invalid and p_dir_attr:
+                        p_dir_attr.Set(Gf.Vec3f(0.0, 0.0, -1.0))
+                        patched += 1
+                    if p_mag_invalid and p_mag_attr:
+                        p_mag_attr.Set(9.81)
+                        patched += 1
+                except Exception:
+                    # Non-fatal; continue with USD physics attrs.
+                    pass
+
+        if patched > 0:
+            log_line("INFO ", f"Patched invalid PhysicsScene gravity attrs ({patched} fields).")
+    except Exception as exc:
+        log_warn(f"PhysicsScene gravity patch skipped: {exc}")
+
+
+def _ensure_sim_context_playing() -> bool:
+    """Best-effort nudge for Isaac Lab SimulationContext when timeline is in PLAY."""
+    try:
+        from isaaclab.sim import SimulationContext
+
+        sim_ctx = SimulationContext.instance()
+        if sim_ctx is None:
+            return False
+        try:
+            sim_ctx.play()
+            return True
+        except Exception:
+            return False
+    except Exception:
+        return False
+
+
+def _set_play_simulations(enabled: bool) -> None:
+    """Best-effort toggle for Kit's simulation-playback flag."""
+    try:
+        import carb
+
+        settings = carb.settings.get_settings()
+        value = bool(enabled)
+        for key in ("/app/player/playSimulations", "/app/player/playSimulation"):
+            try:
+                settings.set_bool(key, value)
+            except Exception:
+                try:
+                    settings.set(key, value)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+
+def _startup_prime_sim_context() -> None:
+    """Prime SimulationContext once so first PLAY starts stepping reliably."""
+    try:
+        from isaaclab.sim import SimulationContext
+
+        sim_ctx = SimulationContext.instance()
+        if sim_ctx is None:
+            return
+        sim_ctx.reset()
+        log_line("INFO ", "Startup SimulationContext primed via reset().")
+    except Exception as exc:
+        log_warn(f"Startup SimulationContext prime skipped: {exc}")
+
+
+async def _wait_for_sim_time_advance(start_time: float, *, max_updates: int = 120, min_delta: float = 5e-4) -> bool:
+    """Wait for timeline simulation time to advance by at least min_delta."""
+    tl = omni.timeline.get_timeline_interface()
+    app = omni.kit.app.get_app()
+    for _ in range(int(max_updates)):
+        await app.next_update_async()
+        try:
+            if tl.is_playing() and (float(tl.get_current_time()) - float(start_time)) >= float(min_delta):
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _cancel_run_bootstrap_task() -> None:
+    task = getattr(STATE, "run_bootstrap_task", None)
+    if task is not None:
+        try:
+            task.cancel()
+        except Exception:
+            pass
+    STATE.run_bootstrap_task = None
+
+
+async def _physics_monitor_task() -> None:
+    """Monitor physics stepping after PLAY by checking timeline time advancement."""
+    try:
+        tl = omni.timeline.get_timeline_interface()
+
+        # Wait 5 frames for physics to warm up.
+        for _ in range(5):
+            await omni.kit.app.get_app().next_update_async()
+
+        t0 = tl.get_current_time()
+
+        # Wait 30 more frames (~0.5s at 60fps).
+        for _ in range(30):
+            if not STATE.playing:
+                return
+            await omni.kit.app.get_app().next_update_async()
+
+        t1 = tl.get_current_time()
+        dt = t1 - t0
+
+        print(f"[PHYS_DIAG] Sim time: t0={t0:.4f}s -> t1={t1:.4f}s  (dt={dt:.4f}s over ~30 frames)", flush=True)
+        if abs(dt) < 0.001:
+            print(f"[PHYS_DIAG] WARNING: Simulation time NOT advancing! Physics is NOT stepping.", flush=True)
+            log_line("WARN ", f"Simulation time not advancing ({t0:.4f}s -> {t1:.4f}s). "
+                     "Physics may not be stepping. Check PhysicsScene prim.")
+            # First-run recovery path in Isaac Lab: ensure SimulationContext is actively in PLAY.
+            _set_play_simulations(True)
+            recovered = False
+            if _ensure_sim_context_playing():
+                for _ in range(20):
+                    if not STATE.playing:
+                        return
+                    await omni.kit.app.get_app().next_update_async()
+                t2 = tl.get_current_time()
+                dt2 = t2 - t1
+                if abs(dt2) >= 0.001:
+                    log_line("INFO ", f"Physics recovered after SimulationContext.play() (dt={dt2:.3f}s).")
+                    recovered = True
+            if not recovered:
+                # Last resort for first-run dead start: reset context then play again.
+                try:
+                    from isaaclab.sim import SimulationContext
+
+                    sim_ctx = SimulationContext.instance()
+                    if sim_ctx is not None:
+                        sim_ctx.reset()
+                        sim_ctx.play()
+                        _set_play_simulations(True)
+                        for _ in range(20):
+                            if not STATE.playing:
+                                return
+                            await omni.kit.app.get_app().next_update_async()
+                        t3 = tl.get_current_time()
+                        dt3 = t3 - t1
+                        if abs(dt3) >= 0.001:
+                            log_line("INFO ", f"Physics recovered after SimulationContext.reset()+play() (dt={dt3:.3f}s).")
+                        else:
+                            log_line("WARN ", "Physics still not stepping after reset+play recovery attempt.")
+                except Exception as exc:
+                    log_warn(f"Physics recovery via SimulationContext reset failed: {exc}")
+        else:
+            print(f"[PHYS_DIAG] OK: Simulation time advancing ({dt:.4f}s over ~30 frames).", flush=True)
+            log_line("INFO ", f"Physics stepping OK: sim time advanced {dt:.3f}s")
+
+        # Log object positions if StateMonitor is active.
+        sm = STATE.state_monitor
+        if sm is not None and sm._tracked_paths:
+            poses_t1 = sm.get_current_poses()
+            for path, pose in list(poses_t1.items())[:5]:
+                print(f"[PHYS_DIAG] Object '{pose.name}': pos=({pose.position[0]:.4f}, {pose.position[1]:.4f}, {pose.position[2]:.4f})", flush=True)
+
+            # Wait another second and compare.
+            for _ in range(60):
+                if not STATE.playing:
+                    return
+                await omni.kit.app.get_app().next_update_async()
+
+            poses_t2 = sm.get_current_poses()
+            for path, pose2 in list(poses_t2.items())[:5]:
+                pose1 = poses_t1.get(path)
+                if pose1 is None:
+                    continue
+                import math as _math
+                disp = _math.sqrt(sum((a - b) ** 2 for a, b in zip(pose1.position, pose2.position)))
+                print(f"[PHYS_DIAG] Object '{pose2.name}' after +1s: "
+                      f"pos=({pose2.position[0]:.4f}, {pose2.position[1]:.4f}, {pose2.position[2]:.4f}), "
+                      f"displacement={disp:.6f}m", flush=True)
+                if disp < 0.0001:
+                    log_line("INFO ", f"Object '{pose2.name}' stationary (disp={disp:.6f}m) — may be at rest")
+
+    except asyncio.CancelledError:
+        pass
+    except Exception as exc:
+        print(f"[PHYS_DIAG] Monitor error: {exc}", flush=True)
+
+
 def on_play() -> None:
     """User-facing PLAY that starts physics/animation."""
     try:
-        omni.timeline.get_timeline_interface().play()
+        tl = omni.timeline.get_timeline_interface()
+        print(f"[PLAY] on_play() called. timeline.is_playing()={tl.is_playing()}, is_stopped()={tl.is_stopped()}", flush=True)
+        if getattr(STATE, "grounding_in_progress", False):
+            log_line("WARN ", "Grounding still in progress — belief state may be empty. Click 'Initiate Cosmos' first for accurate tracking.")
+        log_line("PLAY ", "on_play() -> timeline.play()")
+        t0 = float(tl.get_current_time())
+        _ensure_physics_scene_defaults()
+        _set_play_simulations(True)
+        tl.play()
+        _ensure_sim_context_playing()
+        print(f"[PLAY] timeline.play() returned. is_playing()={tl.is_playing()}", flush=True)
+
+        async def _ensure_play_event_received() -> None:
+            """Safety net: if Kit drops the timeline PLAY event, start the run ourselves."""
+            try:
+                app = omni.kit.app.get_app()
+                # Give the timeline event a few frames to propagate.
+                for _ in range(30):
+                    await app.next_update_async()
+                    if STATE.playing:
+                        return  # _start_run was called by the timeline hook — all good.
+                # Timeline PLAY event was lost; start run directly.
+                if tl.is_playing() and not STATE.playing:
+                    print("[PLAY] Fallback _start_run() (PLAY event not observed)", flush=True)
+                    _start_run()
+            except Exception:
+                pass
+
+        loop = _get_task_loop()
+        loop.create_task(_ensure_play_event_received())
     except Exception as exc:
+        print(f"[PLAY] ERROR in on_play(): {exc}", flush=True)
         log_error(str(exc))
         log_line("ERR  ", str(exc))
 
 
 def _reset_episode_runtime(reason: str) -> None:
     """Stop run tasks and reset simulation state to initial pose."""
+    print(f"[RESET] _reset_episode_runtime(reason={reason})", flush=True)
     # De-bounce duplicated callbacks (toolbar + UI stop can both fire).
     now = time.time()
     last_ts = float(getattr(STATE, "_last_reset_ts", 0.0))
     if now - last_ts < 0.25:
+        print(f"[RESET] Debounced (last reset {now - last_ts:.3f}s ago)", flush=True)
         return
     setattr(STATE, "_last_reset_ts", now)
 
@@ -501,7 +1272,11 @@ def _reset_episode_runtime(reason: str) -> None:
     _clear_worker_input_queue()
     STATE.vlm_busy = False
     STATE.vlm_busy_since = 0.0
+    STATE.vlm_busy_trigger = ""
+    STATE.manual_pending = False
+    STATE.pause_inquiry_until = 0.0
     STATE.last_auto_infer_ts = 0.0
+    _update_vlm_status("idle")
     try:
         STATE.frame_buffer.clear()
     except Exception:
@@ -512,7 +1287,7 @@ def _reset_episode_runtime(reason: str) -> None:
 
         sim_ctx = SimulationContext.instance()
         if sim_ctx is not None:
-            # Full reset restores object states (e.g., orange back to initial pose).
+            # Full reset restores all object states to their initial authored poses.
             sim_ctx.reset()
             log_line("INFO ", "Episode reset via SimulationContext.reset().")
     except Exception as exc:
@@ -525,10 +1300,456 @@ def on_clear() -> None:
     log_info("Cleared logs.")
 
 
+def _queue_combine_batch(
+    command_name: str,
+    combines: list[tuple[str, str, str, str]],
+) -> bool:
+    """Queue and execute a fixed list of combine commands immediately."""
+    ma = STATE.magic_assembly
+    if ma is None:
+        log_line("WARN ", f"/{command_name}: magic_assembly not initialised")
+        return True
+
+    from rc_magic_assembly import AssemblyCommand
+
+    total = len(combines)
+    for index, (child, parent, plug, socket) in enumerate(combines, start=1):
+        ma.enqueue(AssemblyCommand(
+            action="combine",
+            child_name=child,
+            parent_name=parent,
+            plug_name=plug,
+            socket_name=socket,
+            callback=lambda ok, msg, child=child, parent=parent, plug=plug, socket=socket, index=index, total=total: log_line(
+                "INFO " if ok else "WARN ",
+                f"/{command_name}[{index}/{total}] "
+                f"({child!r} -> {parent!r}, plug={plug!r}, socket={socket!r}) "
+                f"{'OK' if ok else 'FAILED: ' + msg}",
+            ),
+        ))
+        log_line(
+            "INFO ",
+            f"/{command_name} queued[{index}/{total}]: "
+            f"{child!r} -> {parent!r} @ plug={plug!r}, socket={socket!r}",
+        )
+
+    try:
+        n = ma.execute_pending()
+        log_line("INFO ", f"/{command_name}: executed {n} pending assembly command(s)")
+    except Exception as exc:
+        log_line("WARN ", f"/{command_name}: execute_pending failed: {exc}")
+    return True
+
+
+def _resolve_existing_part_name(candidates: List[str]) -> str:
+    ma = STATE.magic_assembly
+    if ma is None:
+        return candidates[0]
+    stage = ma._stage_fn()
+    if stage is None:
+        return candidates[0]
+    for name in candidates:
+        try:
+            if ma._find_prim_path(stage, name) is not None:
+                return name
+        except Exception:
+            continue
+    return candidates[0]
+
+
+def _hub_bolt_part_name(index: int, side: str) -> str:
+    side_norm = str(side or "").strip().lower()
+    if side_norm not in {"top", "base"}:
+        raise ValueError(f"unexpected hub-bolt side: {side!r}")
+    return _resolve_existing_part_name(
+        [f"M6_Hub_Bolt_{int(index):02d}_{side_norm}", f"M6_Hub_Bolt_{int(index):02d}"]
+    )
+
+
+def _ensure_case_attachment_assets_logged(command_name: str) -> None:
+    ma = STATE.magic_assembly
+    if ma is None:
+        return
+    try:
+        created = ma.ensure_case_attachment_assets()
+        if any(created.values()):
+            log_line(
+                "INFO ",
+                f"/{command_name} ensured case assets "
+                f"(bolts={created.get('bolts', 0)}, oils={created.get('oils', 0)}, "
+                f"top_sockets={created.get('top_sockets', 0)}, "
+                f"base_alias_sockets={created.get('base_alias_sockets', 0)})",
+            )
+    except Exception as exc:
+        log_line("WARN ", f"/{command_name}: failed to ensure case assets: {exc}")
+
+
+def combine_casing_top() -> bool:
+    """Shortcut for assembling the top-side hub covers and hub bolts onto Casing_Top."""
+    top_output = _resolve_existing_part_name(["Hub_Cover_Output_Top", "Hub_Cover_Output"])
+    top_input = _resolve_existing_part_name(["Hub_Cover_Input_Top", "Hub_Cover_Input"])
+    top_small = _resolve_existing_part_name(["Hub_Cover_Small_Top", "Hub_Cover_Small"])
+    batch = [
+        (top_output, "Casing_Top", "plug_main", "socket_hub_output"),
+        (top_input, "Casing_Top", "plug_main", "socket_hub_input"),
+        (top_small, "Casing_Top", "plug_main", "socket_hub_small"),
+    ]
+    batch.extend(
+        (
+            _hub_bolt_part_name(index, "top"),
+            "Casing_Top",
+            "plug_main",
+            f"socket_bolt_hub_{index}",
+        )
+        for index in (1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 13, 14)
+    )
+    return _queue_combine_batch("combine_casing_top", batch)
+
+
+def combine_casing_base() -> bool:
+    """Shortcut for installing the three ready shaft subassemblies and base-side covers onto Casing_Base."""
+    _ensure_case_attachment_assets_logged("combine_casing_base")
+    base_output = _resolve_existing_part_name(["Hub_Cover_Output_Base", "Hub_Cover_Output"])
+    base_small_01 = _resolve_existing_part_name(
+        ["Hub_Cover_Small_Base_01", "Hub_Cover_Small_Base", "Hub_Cover_Small"]
+    )
+    base_small_02 = _resolve_existing_part_name(
+        ["Hub_Cover_Small_Base_02", "Hub_Cover_Small_Base", "Hub_Cover_Small"]
+    )
+    return _queue_combine_batch(
+        "combine_casing_base",
+        [
+            ("Transfer_Shaft", "Casing_Base", "plug_main", "socket_gear_transfer"),
+            ("Input_Shaft", "Casing_Base", "plug_main", "socket_gear_input"),
+            ("Output_Shaft", "Casing_Base", "plug_main", "socket_gear_output"),
+            (base_output, "Casing_Base", "plug_main", "socket_hub_output"),
+            (base_small_01, "Casing_Base", "plug_main", "socket_hub_small_1"),
+            (base_small_02, "Casing_Base", "plug_main", "socket_hub_small_2"),
+        ]
+        + [
+            (
+                _hub_bolt_part_name(index, "base"),
+                "Casing_Base",
+                "plug_main",
+                f"socket_bolt_hub_{index}",
+            )
+            for index in (1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 13, 14)
+        ],
+    )
+
+
+def combine_base_shafts() -> bool:
+    """Shortcut for assembling the three shafts into Casing_Base."""
+    return _queue_combine_batch(
+        "combine_base_shafts",
+        [
+            ("Transfer_Shaft", "Casing_Base", "plug_main", "socket_gear_transfer"),
+            ("Input_Shaft", "Casing_Base", "plug_main", "socket_gear_input"),
+            ("Output_Shaft", "Casing_Base", "plug_main", "socket_gear_output"),
+        ],
+    )
+
+
+def combine_bolt_hub() -> bool:
+    """Shortcut for assembling the authored M6 hub bolts onto Casing_Top and the casing nuts onto their bolts."""
+    ma = STATE.magic_assembly
+    if ma is None:
+        log_line("WARN ", "/combine_bolt_hub: magic_assembly not initialised")
+        return True
+
+    try:
+        created = ma.ensure_extra_hub_bolt_assets()
+        if created.get("bolts", 0) or created.get("sockets", 0):
+            log_line(
+                "INFO ",
+                "/combine_bolt_hub ensured extra assets "
+                f"(bolts={created.get('bolts', 0)}, sockets={created.get('sockets', 0)})",
+            )
+    except Exception as exc:
+        log_line("WARN ", f"/combine_bolt_hub: failed to ensure extra assets: {exc}")
+
+    return _queue_combine_batch(
+        "combine_bolt_hub",
+        [
+            *[
+                (
+                    _hub_bolt_part_name(index, "top"),
+                    "Casing_Top",
+                    "plug_main",
+                    f"socket_bolt_hub_{index}",
+                )
+                for index in (1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 13, 14)
+            ],
+            ("M10_Casing_Nut_01", "M10_Casing_Bolt_01", "plug_main", None),
+            ("M10_Casing_Nut_02", "M10_Casing_Bolt_02", "plug_main", None),
+            ("M10_Casing_Nut_03", "M10_Casing_Bolt_03", "plug_main", None),
+            ("M10_Casing_Nut_04", "M10_Casing_Bolt_04", "plug_main", None),
+            ("M10_Casing_Nut_05", "M10_Casing_Bolt_05", "plug_main", None),
+            ("M10_Casing_Nut_06", "M10_Casing_Bolt_06", "plug_main", None),
+        ],
+    )
+
+
+def combine_casing_bolt() -> bool:
+    """Shortcut for assembling the six M10 casing bolts from the Casing_Top side and their matching casing nuts."""
+    _ensure_case_attachment_assets_logged("combine_casing_bolt")
+    return _queue_combine_batch(
+        "combine_casing_bolt",
+        [
+            ("M10_Casing_Bolt_01", "Casing_Top", "plug_main", "socket_bolt_casing_1"),
+            ("M10_Casing_Bolt_02", "Casing_Top", "plug_main", "socket_bolt_casing_2"),
+            ("M10_Casing_Bolt_03", "Casing_Top", "plug_main", "socket_bolt_casing_3"),
+            ("M10_Casing_Bolt_04", "Casing_Top", "plug_main", "socket_bolt_casing_4"),
+            ("M10_Casing_Bolt_05", "Casing_Top", "plug_main", "socket_bolt_casing_5"),
+            ("M10_Casing_Bolt_06", "Casing_Top", "plug_main", "socket_bolt_casing_6"),
+            ("M10_Casing_Nut_01", "M10_Casing_Bolt_01", "plug_main", None),
+            ("M10_Casing_Nut_02", "M10_Casing_Bolt_02", "plug_main", None),
+            ("M10_Casing_Nut_03", "M10_Casing_Bolt_03", "plug_main", None),
+            ("M10_Casing_Nut_04", "M10_Casing_Bolt_04", "plug_main", None),
+            ("M10_Casing_Nut_05", "M10_Casing_Bolt_05", "plug_main", None),
+            ("M10_Casing_Nut_06", "M10_Casing_Bolt_06", "plug_main", None),
+        ],
+    )
+
+
+def combine_accessories() -> bool:
+    """Shortcut for oil-level indicators and breather plug on the casing base."""
+    _ensure_case_attachment_assets_logged("combine_accessories")
+    return _queue_combine_batch(
+        "combine_accessories",
+        [
+            ("Oil_Level_Indicator", "Casing_Base", "plug_main", "socket_oil_1"),
+            ("Oil_Level_Indicator_02", "Casing_Base", "plug_main", "socket_oil_2"),
+            ("Breather_Plug", "Casing_Base", "plug_main", "socket_breather"),
+        ],
+    )
+
+
+def _combine_bearing_subassembly(command_name: str) -> bool:
+    """Queue a hardcoded bearing subassembly batch when explicitly enabled."""
+    from rc_magic_assembly import BEARING_SUBASSEMBLY_BATCHES
+
+    combines = BEARING_SUBASSEMBLY_BATCHES.get(command_name, [])
+    if not combines:
+        log_line("WARN ", f"/{command_name} disabled after revert.")
+        return True
+    return _queue_combine_batch(command_name, combines)
+
+
+def combine_input_shaft() -> bool:
+    """Shortcut for the input-shaft bearing subassembly."""
+    return _combine_bearing_subassembly("combine_input_shaft")
+
+
+def combine_transfer_shaft() -> bool:
+    """Shortcut for the transfer-shaft bearing subassembly."""
+    return _combine_bearing_subassembly("combine_transfer_shaft")
+
+
+def combine_output_shaft() -> bool:
+    """Shortcut for the output-shaft bearing subassembly."""
+    return _combine_bearing_subassembly("combine_output_shaft")
+
+
+def _try_slash_command(text: str) -> bool:
+    """Parse and execute a /command entered in the text box.
+
+    Supported commands
+    ------------------
+    /combine("partA", "partB", "plug_name", "socket_name")
+    /separate("part_name")
+    /assemblies          — list all active part attachments
+    /flip_casing_base    — rotate Casing_Base 180° so inside faces upward
+    /combine_casing_top  — combine the top-side hub covers and M6 hub bolts onto Casing_Top
+    /combine_casing_base — install the 3 shaft subassemblies and 3 base-side hub covers onto Casing_Base
+    /combine_base_shafts — combine the 3 shafts into Casing_Base
+    /combine_bolt_hub    — combine the authored M6 hub bolts onto Casing_Top
+    /combine_casing_bolt — combine the 6 M10 casing bolts onto Casing_Top and attach their 6 casing nuts
+    /combine_accessories — combine oil indicators and breather plug onto Casing_Base
+    /combine_output_shaft — combine the two output-shaft bearings with hardcoded offsets
+    Returns True if the text was recognised and handled (so on_send()
+    should NOT forward it to the VLM), False otherwise.
+    """
+    import ast, re
+
+    text = text.strip()
+    if not text.startswith("/"):
+        return False
+
+    # ── /assemblies ──────────────────────────────────────────────────────
+    if re.fullmatch(r"/assemblies\s*", text, re.IGNORECASE):
+        ma = STATE.magic_assembly
+        if ma is None:
+            log_line("WARN ", "/assemblies: magic_assembly not initialised")
+            return True
+        pairs = ma.list_assemblies()
+        if pairs:
+            log_line("INFO ", f"/assemblies ({len(pairs)} active):")
+            for child, parent in pairs:
+                log_line("INFO ", f"  {child}  →  {parent}")
+        else:
+            log_line("INFO ", "/assemblies: no active attachments")
+        return True
+
+    # ── /flip_casing_base ──────────────────────────────────────────────────
+    if re.fullmatch(r"/flip_casing_base\s*", text, re.IGNORECASE):
+        ma = STATE.magic_assembly
+        if ma is None:
+            log_line("WARN ", "/flip_casing_base: magic_assembly not initialised")
+            return True
+        ok = ma.flip_casing_base()
+        log_line("INFO " if ok else "WARN ", f"/flip_casing_base: {'OK' if ok else 'FAILED'}")
+        return True
+
+    # ── batch combine shortcuts ────────────────────────────────────────────
+    if re.fullmatch(r"/combine_casing_top\s*", text, re.IGNORECASE):
+        return combine_casing_top()
+
+    if re.fullmatch(r"/combine_casing_base\s*", text, re.IGNORECASE):
+        return combine_casing_base()
+
+    if re.fullmatch(r"/combine_base_shafts\s*", text, re.IGNORECASE):
+        return combine_base_shafts()
+
+    if re.fullmatch(r"/combine_bolt_hub\s*", text, re.IGNORECASE):
+        return combine_bolt_hub()
+
+    if re.fullmatch(r"/combine_casing_bolt\s*", text, re.IGNORECASE):
+        return combine_casing_bolt()
+
+    if re.fullmatch(r"/combine_accessories\s*", text, re.IGNORECASE):
+        return combine_accessories()
+
+    if re.fullmatch(r"/combine_input_shaft\s*", text, re.IGNORECASE):
+        return combine_input_shaft()
+
+    if re.fullmatch(r"/combine_transfer_shaft\s*", text, re.IGNORECASE):
+        return combine_transfer_shaft()
+
+    if re.fullmatch(r"/combine_output_shaft\s*", text, re.IGNORECASE):
+        return combine_output_shaft()
+
+    # ── /combine or /separate ─────────────────────────────────────────────
+    m = re.fullmatch(r"/(\w+)\s*\((.*)\)\s*", text, re.DOTALL)
+    if not m:
+        # Unrecognised slash command — warn but still intercept (don't hit VLM).
+        log_line(
+            "WARN ",
+            f"Unknown /command: {text!r}  "
+            f"(use /combine, /separate, /assemblies, /combine_casing_top, "
+            f"/combine_casing_base, /combine_base_shafts, /combine_bolt_hub, "
+            f"/combine_casing_bolt, /combine_accessories, /combine_output_shaft)",
+        )
+        return True
+
+    cmd_name = m.group(1).lower()
+    args_src  = m.group(2).strip()
+
+    # Safely parse the argument list with ast — no eval().
+    try:
+        args = ast.literal_eval(f"[{args_src}]")
+    except Exception as exc:
+        log_line("WARN ", f"/command parse error: {exc}  — args must be quoted strings")
+        return True
+
+    ma = STATE.magic_assembly
+    if ma is None:
+        log_line("WARN ", "/command: magic_assembly not initialised")
+        return True
+
+    if cmd_name == "combine":
+        if len(args) != 4:
+            log_line("WARN ", "/combine requires 4 arguments: partA, partB, plug, socket")
+            return True
+        child = str(args[0]).strip()
+        parent = str(args[1]).strip()
+        plug = str(args[2]).strip()
+        socket = str(args[3]).strip()
+        if not child or not parent or not plug or not socket:
+            log_line("WARN ", "/combine arguments cannot be empty")
+            return True
+        if parent in {"Casing_Top", "Casing_Base"}:
+            try:
+                created = ma.ensure_case_attachment_assets()
+                if any(created.values()):
+                    log_line(
+                        "INFO ",
+                        f"/combine prep: created case assets {created}",
+                    )
+            except Exception as exc:
+                log_line("WARN ", f"/combine prep failed: {exc}")
+        from rc_magic_assembly import AssemblyCommand
+        ma.enqueue(AssemblyCommand(
+            action="combine",
+            child_name=child,
+            parent_name=parent,
+            plug_name=plug,
+            socket_name=socket,
+            callback=lambda ok, msg: log_line(
+                "INFO " if ok else "WARN ",
+                f"/combine({child!r} → {parent!r}, plug={plug!r}, socket={socket!r}) "
+                f"{'OK' if ok else 'FAILED: ' + msg}",
+            ),
+        ))
+        log_line(
+            "INFO ",
+            f"/combine queued: {child!r} → {parent!r} @ plug={plug!r}, socket={socket!r}",
+        )
+
+    elif cmd_name == "separate":
+        if len(args) < 1:
+            log_line("WARN ", "/separate requires 1 argument: part_name")
+            return True
+        part = str(args[0])
+        from rc_magic_assembly import AssemblyCommand
+        ma.enqueue(AssemblyCommand(
+            action="separate",
+            part_name=part,
+            callback=lambda ok, msg: log_line(
+                "INFO " if ok else "WARN ",
+                f"/separate({part!r}) {'OK' if ok else 'FAILED: ' + msg}",
+            ),
+        ))
+        log_line("INFO ", f"/separate queued: {part!r}")
+
+    else:
+        log_line(
+            "WARN ",
+            f"Unknown /command: /{cmd_name}  "
+            f"(use /combine, /separate, /assemblies, /combine_casing_top, "
+            f"/combine_casing_base, /combine_base_shafts, /combine_bolt_hub, "
+            f"/combine_casing_bolt, /combine_accessories)",
+        )
+        return True
+
+    # Slash commands run on the main Kit thread, so we can drain the queue
+    # immediately — no need to wait for PLAY / _robot_update_loop.
+    try:
+        n = ma.execute_pending()
+        log_line("INFO ", f"/command: executed {n} pending assembly command(s)")
+    except Exception as exc:
+        log_line("WARN ", f"/command: execute_pending failed: {exc}")
+
+    return True
+
+
 def on_send() -> None:
     """Queue a user message for the cognition worker (non-blocking)."""
     user_text = (STATE.input_model.as_string or "").strip() if STATE.input_model else ""
     if not user_text:
+        return
+
+    # Handle /slash-commands locally — never forward them to the VLM.
+    if user_text.startswith("/"):
+        log_line("YOU  ", user_text)
+        if STATE.input_model:
+            STATE.input_model.set_value("")
+        _try_slash_command(user_text)
+        return
+
+    if STATE.manual_pending:
+        log_line("WARN ", "Manual inquiry already in-flight; please wait.")
+        _sync_vlm_status_indicator()
         return
 
     log_line("YOU  ", user_text)
@@ -542,64 +1763,155 @@ def on_send() -> None:
         except Exception:
             attach = True
 
-    frames: List[Any] = []
-    if attach:
-        # Manual prompts use the latest full temporal window (oldest->newest).
-        # This helps the model reason over scene dynamics instead of a near-duplicate pair.
-        frames = _get_recent_frames(max(INQUIRY_INTERVAL_SEC * 2.5, 1.8), int(INQUIRY_FRAME_COUNT))
-
-    if attach and not frames:
-        log_line("INFO ", "Manual prompt has no buffered frames; sending text-only.")
-
-    # Save frames used for manual prompts for traceability (no blocking on disk I/O).
-    if frames:
-
-        async def _save_manual() -> None:
+    async def _send_manual_with_frames(frames_to_send: List[Any]) -> None:
+        # Save frames used for manual prompts for traceability (no blocking on disk I/O).
+        if frames_to_send:
             try:
-                paths = await asyncio.to_thread(save_sent_frames, "manual", list(frames))
+                paths = await asyncio.to_thread(save_sent_frames, "manual", list(frames_to_send))
                 if paths:
                     log_line("INFO ", f"Manual sent frames: {', '.join(paths)}")
             except Exception as exc:
                 log_warn(f"Failed to save manual frames: {exc}")
 
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = omni.kit.app.get_app().get_async_loop()
-        loop.create_task(_save_manual())
+        # Block auto inquiries until the manual response arrives.
+        STATE.manual_pending = True
+        STATE.pause_inquiry_until = time.time() + 120.0  # released when manual response arrives
+        queued = _enqueue_inference(frames=frames_to_send, user_text=user_text, trigger={"type": "user"}, force=True)
+        if not queued:
+            STATE.manual_pending = False
+            STATE.pause_inquiry_until = 0.0
+            log_line("WARN ", "Manual inquiry rejected: model became busy before enqueue.")
+            _sync_vlm_status_indicator()
+            return
 
-    # Pause auto briefly so the user's request has priority.
-    STATE.pause_inquiry_until = time.time() + float(INQUIRY_INTERVAL_SEC)
-    _enqueue_inference(frames=frames, user_text=user_text, trigger={"type": "user"}, force=True)
+    frames: List[Any] = []
+    manual_frame_count = max(2, int(INQUIRY_FRAME_COUNT))
+    if attach:
+        # Manual prompts use the latest buffered frames so the model can observe the current scene.
+        frames = _get_latest_buffer_frames(manual_frame_count)
+        if frames:
+            log_line("INFO ", f"Manual using {len(frames)} latest buffered frame(s).")
+
+    loop = _get_task_loop()
+
+    if attach and not frames:
+        # On STOP/reset the run buffer is intentionally cleared. Capture a fresh frame
+        # so manual questions still use current visual context instead of text-only memory.
+        log_line("INFO ", "Manual prompt has no buffered frames; capturing a fresh frame.")
+
+        async def _capture_then_send() -> None:
+            live_frames: List[Any] = []
+            try:
+                rgb = await capture_rgb_uint8_async()
+                if rgb is not None:
+                    live_frames = [_clone_frame(rgb)]
+                    log_line("INFO ", "Manual captured a fresh frame (images=1).")
+            except Exception as exc:
+                log_warn(f"Manual fresh-frame capture failed: {exc}")
+
+            if not live_frames and STATE.last_rgb is not None:
+                live_frames = [_clone_frame(STATE.last_rgb)]
+                log_line("INFO ", "Manual fallback to latest cached camera frame (images=1).")
+
+            if not live_frames:
+                log_line("WARN ", "Manual prompt has no visual frame; sending text-only.")
+
+            await _send_manual_with_frames(live_frames)
+
+        loop.create_task(_capture_then_send())
+        return
+
+    loop.create_task(_send_manual_with_frames(frames))
 
 
 async def _capture_loop() -> None:
-    """Capture RGB frames into the RAM ring buffer (does not write to disk)."""
+    """Capture RGB frames into the RAM ring buffer (does not write to disk).
+
+    Rate-limited by wall-clock interval (1/CAPTURE_FPS).
+    Duplicate frames are rejected via a pixel fingerprint check rather than
+    sim-time gating, because Isaac Sim's timeline current_time can wrap or
+    go backwards during bootstrap and early physics warmup.
+    """
     interval = 1.0 / max(0.1, float(CAPTURE_FPS))
     count = 0
+    skipped_static = 0
     last_log = time.time()
+    tl = omni.timeline.get_timeline_interface()
+    last_fingerprint = None
+    wall_start = time.time()
+    # Brief warmup: skip the very first 0.3s to let the renderer produce a
+    # valid first frame after PLAY.
+    warmup_sec = 0.3
+    print(f"[CAPTURE_LOOP] Starting. interval={interval:.3f}s, CAPTURE_FPS={CAPTURE_FPS}, STATE.playing={STATE.playing}", flush=True)
+    iteration = 0
     while STATE.playing:
+        iteration += 1
         try:
+            # Do not trigger Replicator stepping while timeline is stopped/paused.
+            if not tl.is_playing():
+                await omni.kit.app.get_app().next_update_async()
+                continue
+
+            # Brief warmup to let first rendered frame stabilize.
+            if (time.time() - wall_start) < warmup_sec:
+                await asyncio.sleep(0.05)
+                continue
+
+            if iteration <= 3:
+                print(f"[CAPTURE_LOOP] iter={iteration} calling capture_rgb_uint8_async()...", flush=True)
             rgb = await capture_rgb_uint8_async()
             ts = time.time()
+            if iteration <= 3:
+                print(f"[CAPTURE_LOOP] iter={iteration} got frame shape={rgb.shape if rgb is not None else None}", flush=True)
+            if rgb is None:
+                await asyncio.sleep(interval)
+                continue
             # Freeze the frame in RAM; some backends reuse the same underlying buffer.
             try:
                 frozen = rgb.copy()
             except Exception:
                 frozen = rgb
+
+            # Skip visually identical frames (pixel fingerprint dedup).
+            try:
+                sample = frozen[::32, ::32, :]
+                fingerprint = (int(np.sum(sample)), int(np.mean(sample)))
+            except Exception:
+                fingerprint = None
+            if last_fingerprint is not None and fingerprint == last_fingerprint:
+                skipped_static += 1
+                if (ts - last_log) >= 1.0:
+                    log_line(
+                        "INFO ",
+                        f"Captured frames: {count}/s (buffer={len(STATE.frame_buffer)}), skipped_static={skipped_static}/s",
+                    )
+                    count = 0
+                    skipped_static = 0
+                    last_log = ts
+                await asyncio.sleep(interval)
+                continue
+
             STATE.frame_buffer.append((ts, frozen))
+            last_fingerprint = fingerprint
             count += 1
             if (ts - last_log) >= 1.0:
-                log_line("INFO ", f"Captured frames: {count}/s (buffer={len(STATE.frame_buffer)})")
+                log_line(
+                    "INFO ",
+                    f"Captured frames: {count}/s (buffer={len(STATE.frame_buffer)}), skipped_static={skipped_static}/s",
+                )
                 count = 0
+                skipped_static = 0
                 last_log = ts
         except asyncio.CancelledError:
+            print(f"[CAPTURE_LOOP] Cancelled after {iteration} iterations", flush=True)
             break
         except Exception as exc:
+            print(f"[CAPTURE_LOOP] ERROR at iter={iteration}: {exc}", flush=True)
             log_error(str(exc))
             log_line("ERR  ", str(exc))
             break
         await asyncio.sleep(interval)
+    print(f"[CAPTURE_LOOP] Exited. Total iterations={iteration}, STATE.playing={STATE.playing}", flush=True)
 
 
 async def _worker_poll_loop() -> None:
@@ -633,6 +1945,8 @@ async def _worker_poll_loop() -> None:
                 if status != "Done":
                     STATE.vlm_busy = False
                     STATE.vlm_busy_since = 0.0
+                    STATE.vlm_busy_trigger = ""
+                    _update_vlm_status("idle")
                     err = str(msg.get("error") or "")
                     log_line("WARN ", f"Worker status={status}: {err}")
                     # Avoid spamming a dead/OOM model server with immediate retries.
@@ -645,20 +1959,69 @@ async def _worker_poll_loop() -> None:
                 response_time = time.time() - STATE.vlm_busy_since if STATE.vlm_busy_since > 0 else 0
                 STATE.vlm_busy = False
                 STATE.vlm_busy_since = 0.0
+                STATE.vlm_busy_trigger = ""
+                _update_vlm_status("idle")
 
                 # Check if this was a grounding request
                 trigger = msg.get("trigger", {})
-                is_grounding = trigger.get("type") == "grounding" and trigger.get("mode") == "initialization"
+                trigger_type = str((trigger or {}).get("type") or "")
+                is_grounding = trigger_type == "grounding" and trigger.get("mode") == "initialization"
+                is_manual = trigger_type == "user"
+
+                # When a manual request is pending, suppress display of auto responses
+                # that were in-flight before the manual was sent.
+                if STATE.manual_pending and not is_manual and not is_grounding:
+                    log_line("INFO ", f"Auto response suppressed (manual pending, {response_time:.1f}s)")
+                    _update_vlm_status("busy", "user")  # still waiting for manual
+                    # Still update belief state silently from auto response
+                    snapshot = STATE.belief_manager.get_snapshot() if STATE.belief_manager else {}
+                    if STATE.short_memory is not None and isinstance(snapshot, dict):
+                        try:
+                            STATE.short_memory.update_objects_from_belief(snapshot, now=time.time())
+                        except Exception:
+                            pass
+                    continue
+
+                # Clear manual_pending and release auto inquiry pause when manual response arrives.
+                if is_manual:
+                    STATE.manual_pending = False
+                    STATE.pause_inquiry_until = time.time() + float(INQUIRY_INTERVAL_SEC)
+                    _update_vlm_status("idle")
+                elif not is_grounding:
+                    # Throttle completion-driven auto chaining so indicator can reflect true idle gaps.
+                    STATE.pause_inquiry_until = max(
+                        float(STATE.pause_inquiry_until or 0.0),
+                        time.time() + float(INQUIRY_INTERVAL_SEC),
+                    )
 
                 if is_grounding:
-                    log_line("INFO ", f"═══ Grounding Complete ({response_time:.1f}s) ═══")
+                    log_line("INFO ", f"Grounding complete ({response_time:.1f}s) — belief state initialised.")
                     STATE.grounding_complete = True
                     STATE.grounding_in_progress = False
+
+                    # Log the classified objects so the user can verify the split.
+                    _bu = msg.get("belief_update") or {}
+                    if isinstance(_bu, dict):
+                        _active = list((_bu.get("objects") or {}).keys())
+                        _static = list((_bu.get("static_context") or {}).keys())
+                        if _active:
+                            log_line("INFO ", f"Active (Interactable): {_active}")
+                        if _static:
+                            log_line("INFO ", f"Static (Structural):   {_static[:10]}")
+
+                    if STATE.init_status_label is not None:
+                        try:
+                            STATE.init_status_label.text = "Initialization Complete. Ready for Play."
+                            STATE.init_status_label.set_style({"color": 0xFF00CC00})  # green
+                        except Exception:
+                            pass
+
                 else:
                     log_line("INFO ", f"Worker response received ({response_time:.1f}s)")
 
                 reply = str(msg.get("reply") or "")
                 action = msg.get("action") if isinstance(msg.get("action"), dict) else {}
+                stm_observation = str(msg.get("stm_observation") or "")
                 ltm_snips = msg.get("ltm_snippets") if isinstance(msg.get("ltm_snippets"), list) else []
                 snapshot = STATE.belief_manager.get_snapshot() if STATE.belief_manager else {}
 
@@ -674,11 +2037,16 @@ async def _worker_poll_loop() -> None:
                 belief_update = msg.get("belief_update") or {}
 
                 # Also print to stdout so it appears in terminal regardless of UI
+                print(f"[WORKER] stm={stm_observation[:200]!r}", flush=True)
                 print(f"[WORKER] reply={reply[:200]!r}", flush=True)
                 if isinstance(raw_output, dict):
                     raw_reply = str(raw_output.get("reply") or "")
                     raw_meta = raw_output.get("meta", {})
                     print(f"[WORKER] raw.reply={raw_reply[:200]!r} | raw.meta={raw_meta}", flush=True)
+
+                # --- Three-Stage Display: STM (perception) then Reply (belief-based) ---
+                if stm_observation and stm_observation not in ("no observation",):
+                    log_line("SEE  ", stm_observation)
 
                 # Find the best reply text from multiple sources
                 display_reply = ""
@@ -690,7 +2058,15 @@ async def _worker_poll_loop() -> None:
                         display_reply = raw_reply
 
                 if display_reply:
-                    _log_long("AI   ", display_reply)
+                    display_reply = _extract_reply_text(display_reply)
+                    # Keep UI concise: one AI entry per worker response.
+                    last_reply = str(getattr(STATE, "_last_logged_ai_reply", "") or "")
+                    last_ts = float(getattr(STATE, "_last_logged_ai_ts", 0.0) or 0.0)
+                    now_ts = time.time()
+                    if not (display_reply == last_reply and (now_ts - last_ts) < 2.0):
+                        log_line("AI   ", display_reply)
+                        setattr(STATE, "_last_logged_ai_reply", display_reply)
+                        setattr(STATE, "_last_logged_ai_ts", now_ts)
                     STATE.last_vlm_response = display_reply
                 else:
                     # Build summary from belief_update objects
@@ -720,7 +2096,7 @@ async def _worker_poll_loop() -> None:
 
                 # Log belief update and action
                 if belief_update:
-                    log_line("INFO ", f"Belief update: {json.dumps(belief_update, ensure_ascii=True)[:500]}")
+                    log_line("INFO ", f"Belief: {json.dumps(belief_update, ensure_ascii=True)[:500]}")
                 if action and action.get("type") != "noop":
                     log_line("INFO ", f"Action: {json.dumps(action, ensure_ascii=True)}")
 
@@ -750,22 +2126,71 @@ async def _worker_poll_loop() -> None:
 
                 # Execute robot action on the main thread (non-blocking, persistent target).
                 rc = STATE.robot_controller
-                if rc is not None and getattr(rc, "enabled", False) and isinstance(action, dict) and action:
+                if isinstance(action, dict) and action:
                     a_type = str(action.get("type") or "").strip().lower()
-                    if a_type and a_type != "noop":
+                    # --- Magic assembly actions (kinematic snap) ---
+                    if a_type in ("combine", "separate"):
+                        ma = STATE.magic_assembly
+                        if ma is not None:
+                            from rc_magic_assembly import AssemblyCommand
+                            args = action.get("args") or {}
+                            if a_type == "combine":
+                                child = str(args.get("child") or args.get("child_name") or args.get("partA") or "").strip()
+                                parent = str(args.get("parent") or args.get("parent_name") or args.get("partB") or "").strip()
+                                plug = str(args.get("plug") or args.get("plug_name") or "").strip()
+                                socket = str(args.get("socket") or args.get("socket_name") or "").strip()
+                                if not (child and parent and plug and socket):
+                                    log_line(
+                                        "WARN ",
+                                        "combine ignored: requires args {partA/child, partB/parent, plug, socket}",
+                                    )
+                                    _sync_vlm_status_indicator()
+                                    await asyncio.sleep(0.05)
+                                    continue
+                                cmd = AssemblyCommand(
+                                    action="combine",
+                                    child_name=child,
+                                    parent_name=parent,
+                                    plug_name=plug,
+                                    socket_name=socket,
+                                )
+                            else:
+                                cmd = AssemblyCommand(
+                                    action="separate",
+                                    part_name=str(args.get("part") or args.get("part_name") or ""),
+                                )
+                            ma.enqueue(cmd)
+                            log_line("INFO ", f"Assembly queued: {a_type} {args}")
+                        else:
+                            log_line("WARN ", "magic_assembly not initialized — combine/separate ignored")
+                    # --- Physical robot arm actions ---
+                    elif rc is not None and getattr(rc, "enabled", False) and a_type and a_type != "noop":
                         rc.set_action(action)
                         if STATE.short_memory is not None:
                             STATE.short_memory.set_last_action(action, status="running")
+                _sync_vlm_status_indicator()
         except queue.Empty:
             # Watchdog: if worker has been busy for too long without output, log it
             if STATE.vlm_busy and STATE.vlm_busy_since > 0:
                 busy_duration = time.time() - STATE.vlm_busy_since
                 if busy_duration > 30.0:  # 30 second timeout
-                    log_line("WARN ", f"Worker busy for {busy_duration:.1f}s without response - may be stuck")
+                    now_ts = time.time()
+                    last_warn_ts = float(getattr(STATE, "_worker_busy_warn_ts", 0.0) or 0.0)
+                    # Throttle repetitive watchdog warnings to keep the terminal readable.
+                    if (now_ts - last_warn_ts) >= 30.0:
+                        log_line("WARN ", f"Worker busy for {busy_duration:.1f}s without response - may be stuck")
+                        setattr(STATE, "_worker_busy_warn_ts", now_ts)
                     if busy_duration > 60.0:  # 1 minute - force release
                         STATE.vlm_busy = False
                         STATE.vlm_busy_since = 0.0
+                        STATE.vlm_busy_trigger = ""
+                        _update_vlm_status("idle")
                         log_line("WARN ", "Worker watchdog: released stuck busy flag")
+                        setattr(STATE, "_worker_busy_warn_ts", 0.0)
+            else:
+                if getattr(STATE, "_worker_busy_warn_ts", 0.0):
+                    setattr(STATE, "_worker_busy_warn_ts", 0.0)
+                _sync_vlm_status_indicator()
         except asyncio.CancelledError:
             break
         except Exception as exc:
@@ -777,48 +2202,32 @@ async def _worker_poll_loop() -> None:
 
 
 async def _inquiry_loop() -> None:
-    """Completion-driven auto trigger.
+    """Watchdog loop — keeps VLM busy-flag healthy; does NOT auto-enqueue frames.
 
-    While playing:
-    - keep at most one in-flight request,
-    - when free, enqueue the latest recent frame sequence,
-    - do not build periodic backlog.
+    Inference is now purely event-driven:
+      • GT change    : _robot_update_loop() fires when a tracked object moves > threshold.
+      • User message : on_send() fires when the human types in the chat.
+      • Test button  : on_test_cosmos() fires on demand.
+
+    This loop's only job is to release a stale busy-flag when the worker thread
+    crashes or times out without sending a reply, so the pipeline never gets stuck.
     """
+    print(f"[INQUIRY] _inquiry_loop() starting (watchdog-only). STATE.playing={STATE.playing}", flush=True)
     while STATE.playing:
-        tick = 0.05
+        tick = 0.1
         try:
-            if time.time() < float(STATE.pause_inquiry_until or 0.0):
-                await asyncio.sleep(tick)
-                continue
+            _sync_vlm_status_indicator()
 
-            # Completion-driven chaining: only queue a new auto request when the previous one finished.
+            # Release stale busy flag if worker got stuck/crashed without a callback.
             if STATE.vlm_busy:
-                # If worker got stuck/crashed without callback, release the busy flag after timeout.
-                if (time.time() - float(STATE.vlm_busy_since or 0.0)) > max(30.0, float(TIMEOUT_SEC) * 1.5):
+                stale_threshold = max(30.0, float(TIMEOUT_SEC) * 1.5)
+                if (time.time() - float(STATE.vlm_busy_since or 0.0)) > stale_threshold:
                     STATE.vlm_busy = False
                     STATE.vlm_busy_since = 0.0
-                    log_line("WARN ", "Auto inquiry watchdog released a stale in-flight request.")
-                await asyncio.sleep(tick)
-                continue
+                    STATE.vlm_busy_trigger = ""
+                    log_line("WARN ", "Watchdog: released stale in-flight VLM request.")
+                    _sync_vlm_status_indicator()
 
-            # Strict async mode: after each completed reply, send newest unseen frames only.
-            auto_frame_limit = max(1, int(INQUIRY_FRAME_COUNT))
-            frames, newest_ts = _get_frames_since(float(STATE.last_auto_infer_ts or 0.0), auto_frame_limit)
-            min_auto_frames = max(3, min(auto_frame_limit, 5))
-            if len(frames) < min_auto_frames:
-                await asyncio.sleep(tick)
-                continue
-
-            # Save the exact batch used for auto inference (traceability).
-            try:
-                paths = await asyncio.to_thread(save_sent_frames, "auto", list(frames))
-                if paths:
-                    log_line("INFO ", f"Auto sent frames: {', '.join(paths)}")
-            except Exception as exc:
-                log_warn(f"Failed to save auto frames: {exc}")
-
-            if _enqueue_inference(frames=frames, user_text=STREAM_DEFAULT_PROMPT, trigger={"type": "after_reply"}, force=False):
-                STATE.last_auto_infer_ts = max(float(STATE.last_auto_infer_ts or 0.0), float(newest_ts))
         except asyncio.CancelledError:
             break
         except Exception as exc:
@@ -834,12 +2243,33 @@ async def _robot_update_loop() -> None:
     rc = STATE.robot_controller
     sm = STATE.state_monitor
     last_status = None
+    _frame_count = 0
+    _last_diag_time = time.time()
+    _pending_gt_trigger = None  # {"changed_objects": [...], "max_displacement": float, "event_ts": float, "capture_since_ts": float}
+    _last_gt_wait_log = 0.0
+    _last_gt_event_ts = 0.0
     while STATE.playing:
+        _frame_count += 1
+        # Periodic physics time check (every ~120 frames / ~2s).
+        if _frame_count % 120 == 0:
+            try:
+                _tl = omni.timeline.get_timeline_interface()
+                _now = time.time()
+                _elapsed = _now - _last_diag_time
+                print(f"[PHYS_TICK] frame={_frame_count}, sim_time={_tl.get_current_time():.3f}s, "
+                      f"is_playing={_tl.is_playing()}, wall_elapsed={_elapsed:.1f}s", flush=True)
+                _last_diag_time = _now
+            except Exception:
+                pass
         try:
+            # Drain the magic assembly command queue (main-thread USD writes).
+            if STATE.magic_assembly is not None:
+                STATE.magic_assembly.execute_pending()
+
             # Update robot controller if enabled
             if rc is not None and getattr(rc, "enabled", False):
                 status = rc.update()
-                # Trigger a refresh when an action completes.
+                # Keep task/action status synchronized in STM.
                 if last_status and last_status.status == "running" and status.status in ("done", "error"):
                     # Update STM status for downstream prompting / UI.
                     if STATE.short_memory is not None:
@@ -852,13 +2282,6 @@ async def _robot_update_loop() -> None:
                         except Exception:
                             pass
                     log_line("INFO ", f"Robot action finished: {status.status} ({status.detail})")
-                    frames = _get_recent_frames(INQUIRY_INTERVAL_SEC, INQUIRY_FRAME_COUNT)
-                    _enqueue_inference(
-                        frames=frames,
-                        user_text="Describe scene changes after the robot action completed.",
-                        trigger={"type": "action_finished", "status": status.status, "detail": status.detail},
-                        force=False,
-                    )
                 last_status = status
 
             # Monitor GT state changes and trigger inference
@@ -866,28 +2289,92 @@ async def _robot_update_loop() -> None:
                 trigger_event = sm.update()
                 if trigger_event is not None:
                     # Skip if displacement is negligible (initial baseline or noise)
-                    if trigger_event.max_displacement < 0.001:
+                    if trigger_event.max_displacement >= 0.001:
+                        event_ts = float(getattr(trigger_event, "timestamp", 0.0) or time.time())
+                        # De-duplicate repeated monitor callbacks for the same event timestamp.
+                        if event_ts > (_last_gt_event_ts + 1e-9):
+                            _last_gt_event_ts = event_ts
+                            changed_names = ", ".join(trigger_event.changed_objects) if trigger_event.changed_objects else "objects"
+                            log_line(
+                                "INFO ",
+                                f"GT trigger: {trigger_event.changed_objects} changed (displacement={trigger_event.max_displacement:.3f}m)",
+                            )
+                            # Save/update pending trigger (accumulate changed objects across firings).
+                            if _pending_gt_trigger is None:
+                                _pending_gt_trigger = {
+                                    "changed_objects": list(trigger_event.changed_objects or []),
+                                    "max_displacement": float(trigger_event.max_displacement),
+                                    "event_ts": event_ts,
+                                    # Start post-trigger frame capture now; dispatch only after 5 frames.
+                                    "capture_since_ts": event_ts,
+                                }
+                            else:
+                                merged_objects = list(
+                                    dict.fromkeys(
+                                        list(_pending_gt_trigger.get("changed_objects", []))
+                                        + list(trigger_event.changed_objects or [])
+                                    )
+                                )
+                                _pending_gt_trigger["changed_objects"] = merged_objects
+                                _pending_gt_trigger["max_displacement"] = max(
+                                    float(_pending_gt_trigger.get("max_displacement", 0.0)),
+                                    float(trigger_event.max_displacement),
+                                )
+                                _pending_gt_trigger["event_ts"] = max(
+                                    float(_pending_gt_trigger.get("event_ts", event_ts)),
+                                    event_ts,
+                                )
+                                changed_names = ", ".join(merged_objects) if merged_objects else "objects"
+
+                # Try to dispatch pending GT trigger with the latest buffered frames.
+                _GT_FRAME_COUNT = 5
+                if _pending_gt_trigger is not None:
+                    # Never enqueue while another request is in-flight/queued.
+                    if _has_pending_inference() or STATE.manual_pending or (time.time() < float(STATE.pause_inquiry_until or 0.0)):
+                        await omni.kit.app.get_app().next_update_async()
                         continue
 
-                    changed_names = ", ".join(trigger_event.changed_objects) if trigger_event.changed_objects else "objects"
-                    log_line("INFO ", f"GT trigger: {trigger_event.changed_objects} changed (displacement={trigger_event.max_displacement:.3f}m)")
-                    frames = _get_recent_frames(INQUIRY_INTERVAL_SEC, INQUIRY_FRAME_COUNT)
+                    changed_objects = list(_pending_gt_trigger.get("changed_objects", []))
+                    changed_names = ", ".join(changed_objects) if changed_objects else "objects"
+                    capture_since_ts = float(_pending_gt_trigger.get("capture_since_ts", 0.0))
 
-                    # Skip if frame buffer is empty (happens at startup before capture loop fills buffer)
-                    if not frames:
-                        log_line("WARN ", f"GT trigger skipped - frame buffer empty (need {INQUIRY_FRAME_COUNT} frames)")
-                    else:
-                        _enqueue_inference(
+                    # Capture strictly post-trigger consecutive frames; dispatch once we have 5.
+                    buffered_items = list(STATE.frame_buffer)
+                    post_trigger_items = [(ts, rgb) for ts, rgb in buffered_items if float(ts) >= capture_since_ts]
+                    if len(post_trigger_items) >= _GT_FRAME_COUNT:
+                        frames = [_clone_frame(rgb) for _ts, rgb in post_trigger_items[-_GT_FRAME_COUNT:]]
+                        log_line(
+                            "INFO ",
+                            f"GT trigger dispatched ({len(post_trigger_items)} post-trigger buffered, sending {len(frames)})",
+                        )
+                        try:
+                            paths = await asyncio.to_thread(save_sent_frames, "auto_gt", list(frames))
+                            if paths:
+                                log_line("INFO ", f"Auto sent frames: {', '.join(paths)}")
+                        except Exception as exc:
+                            log_warn(f"Failed to save GT-triggered frames: {exc}")
+
+                        queued = _enqueue_inference(
                             frames=frames,
                             user_text=f"Objects moved: {changed_names}. Describe what changed and update belief states.",
                             trigger={
                                 "type": "gt_change",
-                                "changed_objects": trigger_event.changed_objects,
-                                "max_displacement": trigger_event.max_displacement,
-                                "timestamp": trigger_event.timestamp
+                                "changed_objects": changed_objects,
+                                "max_displacement": float(_pending_gt_trigger.get("max_displacement", 0.0)),
+                                "timestamp": float(_pending_gt_trigger.get("event_ts", time.time())),
                             },
                             force=False,
                         )
+                        if queued:
+                            _pending_gt_trigger = None
+                    else:
+                        now = time.time()
+                        if now - _last_gt_wait_log > 1.0:
+                            log_line(
+                                "INFO ",
+                                f"GT trigger waiting for 5 post-trigger frames (have {len(post_trigger_items)}).",
+                            )
+                            _last_gt_wait_log = now
         except asyncio.CancelledError:
             break
         except Exception as exc:
@@ -897,17 +2384,18 @@ async def _robot_update_loop() -> None:
 
 
 def start_capture_and_inquiry() -> None:
+    print(f"[CAPTURE] start_capture_and_inquiry() called. capture_task={STATE.capture_task}, inquiry_task={STATE.inquiry_task}", flush=True)
     if STATE.capture_task is not None or STATE.inquiry_task is not None:
+        print(f"[CAPTURE] Tasks already exist, returning early", flush=True)
         return
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = omni.kit.app.get_app().get_async_loop()
+    loop = _get_task_loop()
 
+    print(f"[CAPTURE] Creating _capture_loop, _inquiry_loop, _robot_update_loop tasks", flush=True)
     STATE.capture_task = loop.create_task(_capture_loop())
     STATE.inquiry_task = loop.create_task(_inquiry_loop())
     if STATE.robot_update_task is None:
         STATE.robot_update_task = loop.create_task(_robot_update_loop())
+    print(f"[CAPTURE] Tasks created successfully", flush=True)
 
 
 def stop_capture_and_inquiry() -> None:
@@ -923,30 +2411,160 @@ def stop_capture_and_inquiry() -> None:
 
 
 def _set_run_frames_dir() -> None:
+    pending = str(getattr(STATE, "pending_run_frames_dir", "") or "").strip()
+    if pending:
+        run_dir = pending
+        os.makedirs(run_dir, exist_ok=True)
+        STATE.pending_run_frames_dir = ""
+        log_line("INFO ", f"Run frames dir (reused from init): {run_dir}")
+    else:
+        ts = time.strftime("%Y%m%d_%H%M%S")
+        run_dir = os.path.join(STATE.sent_frames_root, ts)
+        os.makedirs(run_dir, exist_ok=True)
+        log_line("INFO ", f"Run frames dir: {run_dir}")
+    STATE.sent_frames_dir = run_dir
+
+
+def _ensure_preplay_frames_dir() -> str:
+    """Create/reuse a pre-play sent_frames dir so init + run share one folder."""
+    pending = str(getattr(STATE, "pending_run_frames_dir", "") or "").strip()
+    if pending:
+        os.makedirs(pending, exist_ok=True)
+        STATE.sent_frames_dir = pending
+        return pending
     ts = time.strftime("%Y%m%d_%H%M%S")
     run_dir = os.path.join(STATE.sent_frames_root, ts)
     os.makedirs(run_dir, exist_ok=True)
+    STATE.pending_run_frames_dir = run_dir
     STATE.sent_frames_dir = run_dir
-    log_line("INFO ", f"Run frames dir: {run_dir}")
+    return run_dir
+
+
+async def _bootstrap_run_start(run_id_snapshot: int) -> None:
+    """Ensure timeline/physics is really advancing before starting capture/inquiry tasks."""
+    tl = omni.timeline.get_timeline_interface()
+    try:
+        if not tl.is_playing():
+            _set_play_simulations(True)
+            tl.play()
+
+        start_t = float(tl.get_current_time())
+        started = await _wait_for_sim_time_advance(start_t, max_updates=90, min_delta=5e-4)
+        if not started:
+            # Guard: suppress timeline STOP events during recovery so _end_run is not
+            # triggered by our internal stop→play cycles.
+            STATE._bootstrap_recovery = True
+            try:
+                for attempt in (1, 2, 3):
+                    log_line("WARN ", f"PLAY latched but simulation time did not advance; recovery attempt {attempt}/3.")
+                    try:
+                        tl.stop()
+                        await omni.kit.app.get_app().next_update_async()
+                        await omni.kit.app.get_app().next_update_async()
+                    except Exception:
+                        pass
+
+                    _set_play_simulations(True)
+                    _ensure_physics_scene_defaults()
+
+                    if attempt >= 2:
+                        # Harder nudge for first-run dead start in some Isaac Lab sessions.
+                        try:
+                            from isaaclab.sim import SimulationContext
+
+                            sim_ctx = SimulationContext.instance()
+                            if sim_ctx is not None:
+                                sim_ctx.reset()
+                        except Exception:
+                            pass
+
+                    _ensure_sim_context_playing()
+                    tl.play()
+                    # Give more frames on later attempts for physics to initialise.
+                    wait_updates = 120 if attempt < 3 else 180
+                    started = await _wait_for_sim_time_advance(float(tl.get_current_time()), max_updates=wait_updates, min_delta=5e-4)
+                    if started:
+                        break
+            finally:
+                STATE._bootstrap_recovery = False
+
+        if (not started) or (run_id_snapshot != int(STATE.run_id)) or (not STATE.playing):
+            log_line("WARN ", "Simulation did not start stepping on this PLAY. Run bootstrap aborted.")
+            STATE.playing = False
+            STATE.run_active = False
+            try:
+                tl.stop()
+            except Exception:
+                pass
+            _set_play_simulations(False)
+            return
+
+        # Replicator products can be invalidated after STOP/PLAY cycles; refresh once per run.
+        try:
+            init_camera()
+        except Exception as exc:
+            log_line("WARN ", f"Camera re-init during run bootstrap failed: {exc}")
+
+        print(f"[START_RUN] Bootstrap OK for run_id={run_id_snapshot}; starting capture/inquiry tasks", flush=True)
+        start_capture_and_inquiry()
+        _diagnose_physics_scene()
+        loop = _get_task_loop()
+        loop.create_task(_physics_monitor_task())
+    except asyncio.CancelledError:
+        pass
+    except Exception as exc:
+        log_line("ERR  ", f"Run bootstrap failed: {exc}")
+        STATE.playing = False
+        STATE.run_active = False
+        _set_play_simulations(False)
+    finally:
+        # Clear handle once task exits.
+        if getattr(STATE, "run_bootstrap_task", None) is asyncio.current_task():
+            STATE.run_bootstrap_task = None
 
 
 def _start_run() -> None:
+    print(f"[START_RUN] _start_run() called. STATE.playing={STATE.playing}", flush=True)
     if STATE.playing:
+        print(f"[START_RUN] Already playing, returning early", flush=True)
         return
+    _set_play_simulations(True)
     STATE.run_id += 1
     STATE.playing = True
     STATE.run_active = True
     STATE.run_start_time = time.time()
     STATE.last_auto_infer_ts = float(STATE.run_start_time)
     _set_run_frames_dir()
-    start_capture_and_inquiry()
+
+    # Repair invalid stage gravity attrs before starting capture/agent loops.
+    _ensure_physics_scene_defaults()
+
+    # Initialize cognition pipeline eagerly (StateMonitor, memory, worker, etc.)
+    # so GT tracking and robot control are active from the first frame.
+    try:
+        _init_pipeline_once()
+    except Exception as exc:
+        print(f"[START_RUN] _init_pipeline_once() failed: {exc}", flush=True)
+        log_warn(f"Pipeline init failed: {exc}")
+
+    print(f"[START_RUN] STATE.playing={STATE.playing}, run_id={STATE.run_id}. Bootstrapping run start...", flush=True)
+    _cancel_run_bootstrap_task()
+    loop = _get_task_loop()
+    STATE.run_bootstrap_task = loop.create_task(_bootstrap_run_start(int(STATE.run_id)))
+
+    print(f"[START_RUN] bootstrap task created: {STATE.run_bootstrap_task}", flush=True)
+    log_line("INFO ", f"Run #{STATE.run_id} started.")
 
 
 def _end_run(*, reason: str) -> None:
+    print(f"[END_RUN] _end_run(reason={reason}). STATE.playing={STATE.playing}", flush=True)
     if not STATE.playing:
+        print(f"[END_RUN] Not playing, returning early", flush=True)
         return
     STATE.playing = False
     STATE.run_active = False
+    _set_play_simulations(False)
+    _cancel_run_bootstrap_task()
     stop_capture_and_inquiry()
     if STATE.run_start_time:
         duration = time.time() - STATE.run_start_time
@@ -956,7 +2574,7 @@ def _end_run(*, reason: str) -> None:
     if STATE.long_memory is not None:
         snap = STATE.short_memory.get_snapshot() if STATE.short_memory is not None else {}
         belief = STATE.belief_manager.get_snapshot() if STATE.belief_manager is not None else {}
-        payload = {"task": "falling_orange", "last_belief": belief, "stm": snap}
+        payload = {"task": "scene_episode", "last_belief": belief, "stm": snap}
 
         async def _store_episode_async() -> None:
             try:
@@ -964,15 +2582,13 @@ def _end_run(*, reason: str) -> None:
             except Exception as exc:
                 log_warn(f"Failed to store episode in LTM: {exc}")
 
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = omni.kit.app.get_app().get_async_loop()
+        loop = _get_task_loop()
         loop.create_task(_store_episode_async())
 
 
 def on_end_run() -> None:
     """User-facing STOP: pause timeline and reset episode to initial state."""
+    print("[STOP] on_end_run() called from UI", flush=True)
     try:
         tl = omni.timeline.get_timeline_interface()
         # Explicit STOP to match user expectation and force timeline state transition.
@@ -990,9 +2606,11 @@ def on_reset_episode() -> None:
 
 def _install_timeline_run_hooks() -> None:
     """Start/stop the run on Timeline events without polling."""
+    print(f"[HOOKS] _install_timeline_run_hooks() called. Already installed={getattr(STATE, '_timeline_hooks_installed', False)}", flush=True)
     if getattr(STATE, "_timeline_hooks_installed", False):
         return
     setattr(STATE, "_timeline_hooks_installed", True)
+    print(f"[HOOKS] Installing timeline event subscription...", flush=True)
 
     timeline = omni.timeline.get_timeline_interface()
     stream = timeline.get_timeline_event_stream()
@@ -1004,17 +2622,29 @@ def _install_timeline_run_hooks() -> None:
             et = -1
 
         if et == int(omni.timeline.TimelineEventType.PLAY):
-            _start_run()
+            print(f"[TIMELINE] PLAY (bootstrap_recovery={STATE._bootstrap_recovery})", flush=True)
+            if not STATE._bootstrap_recovery:
+                _start_run()
+            else:
+                print(f"[TIMELINE] PLAY suppressed (bootstrap recovery in progress)", flush=True)
         elif et == int(omni.timeline.TimelineEventType.PAUSE):
+            print(f"[TIMELINE] PAUSE -> STOP", flush=True)
             # Convert PAUSE into full STOP semantics so reset is deterministic.
             try:
                 timeline.stop()
             except Exception:
                 pass
-            _reset_episode_runtime("timeline_pause")
+            if not STATE._bootstrap_recovery:
+                _reset_episode_runtime("timeline_pause")
+            else:
+                print(f"[TIMELINE] PAUSE suppressed (bootstrap recovery in progress)", flush=True)
         elif et == int(omni.timeline.TimelineEventType.STOP):
-            # Stop means reset to initial episode state.
-            _reset_episode_runtime("timeline_stop")
+            print(f"[TIMELINE] STOP", flush=True)
+            if not STATE._bootstrap_recovery:
+                _reset_episode_runtime("timeline_stop")
+            else:
+                print(f"[TIMELINE] STOP suppressed (bootstrap recovery in progress)", flush=True)
+        # else: ignore tick/update events (type=4 etc.)
 
     try:
         sub = stream.create_subscription_to_pop(_on_timeline_event)
@@ -1048,8 +2678,11 @@ def build_ui() -> None:
                     with ui.HStack(height=28, spacing=8):
                         ui.Button("Init Camera", clicked_fn=on_init_cam, height=28)
                         ui.Button("Initiate Cosmos", clicked_fn=on_initiate_cosmos, height=28, tooltip="Pre-simulation: VLM identifies objects and creates initial belief state")
+                        # Init status: "Ready (no init)" → "Initializing..." → "Ready ✓"
+                        STATE.init_status_label = ui.Label("Ready (no init)", width=130, alignment=ui.Alignment.LEFT)
+                        STATE.init_status_label.set_style({"color": 0xFF888888})  # grey = not yet initialised
                         ui.Button("Test Cosmos", clicked_fn=on_test_cosmos, height=28)
-                        ui.Button("PLAY", clicked_fn=on_play, height=28)
+                        STATE.play_button = ui.Button("PLAY", clicked_fn=on_play, height=28)
                         ui.Button("STOP", clicked_fn=on_end_run, height=28)
                         ui.Spacer()
                         ui.Button("Clear", clicked_fn=on_clear, height=28)
@@ -1057,14 +2690,19 @@ def build_ui() -> None:
                     with ui.HStack(height=22, spacing=8):
                         STATE.attach_latest_model = ui.SimpleBoolModel(True)
                         ui.CheckBox(STATE.attach_latest_model, width=18, height=18)
-                        ui.Label("Attach recent frames to manual prompts (last 1s)")
+                        ui.Label("Attach recent frames to manual prompts")
 
                     ui.Label(f"Camera Prim: {STATE.active_camera_prim_path}", word_wrap=True)
-                    ui.Label(f"Cosmos Endpoint: {cosmos_endpoint()}", word_wrap=True)
+                    ui.Label(f"Cosmos Endpoint: {cosmos_endpoint() or '<disabled>'}", word_wrap=True)
                     ui.Label(f"Cosmos Model: {COSMOS_MODEL}", word_wrap=True)
 
             ui.Separator()
-            ui.Label("Terminal:")
+
+            with ui.HStack(height=20, spacing=8):
+                ui.Label("Terminal:")
+                ui.Spacer()
+                STATE.vlm_status_label = ui.Label("VLM: Idle", width=260, alignment=ui.Alignment.RIGHT)
+                STATE.vlm_status_label.set_style({"color": 0xFF00CC00})  # green
 
             # Use a larger fixed terminal area for better visibility.
             STATE.log_frame = ui.ScrollingFrame(height=300)
@@ -1162,13 +2800,15 @@ def _install_startup_autostop_hooks() -> None:
             setattr(STATE, "_startup_stage_event_handled", True)
             try:
                 if timeline.is_playing():
-                    timeline.pause()
+                    timeline.stop()
+                    _set_play_simulations(False)
                     log_warn(
-                        "Timeline PLAY detected during startup/stage-load; forced PAUSE. Click PLAY once the stage finishes loading."
+                        "Timeline PLAY detected during startup/stage-load; forced STOP. Click PLAY once the stage finishes loading."
                     )
                 else:
-                    # Still call PAUSE to ensure we are not advancing.
-                    timeline.pause()
+                    # Ensure STOPPED state (not just paused) for clean physics init.
+                    timeline.stop()
+                    _set_play_simulations(False)
                 _force_show_play_button()
             except Exception:
                 pass
@@ -1182,19 +2822,18 @@ def _install_startup_autostop_hooks() -> None:
 
 
 def run() -> None:
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = omni.kit.app.get_app().get_async_loop()
+    loop = _get_task_loop()
 
     _configure_quiet_kit_logging()
     _ensure_asset_browser_cache_dir()
 
     # Install stage/timeline hooks immediately so we don't miss early stage-open events.
     _install_startup_autostop_hooks()
-    # Best-effort: force PAUSE immediately on script start (keeps toolbar PLAY available).
+    # Best-effort: force STOP immediately on script start.
+    # STOP (not PAUSE) ensures timeline is at t=0 with clean physics state.
     try:
-        omni.timeline.get_timeline_interface().pause()
+        omni.timeline.get_timeline_interface().stop()
+        _set_play_simulations(False)
     except Exception:
         pass
     # Hide built-in timeline controls to avoid PLAY/PAUSE ambiguity; use panel PLAY/STOP.
@@ -1222,8 +2861,10 @@ def run() -> None:
         deadline = time.time() + float(max_duration_sec)
 
         # Force STOP once immediately (best-effort).
+        # Use stop() (not pause()) so timeline resets to t=0 with clean physics.
         try:
-            timeline.pause()
+            timeline.stop()
+            _set_play_simulations(False)
         except Exception:
             pass
 
@@ -1231,9 +2872,10 @@ def run() -> None:
             try:
                 if timeline.is_playing():
                     stable = 0
-                    timeline.pause()
+                    timeline.stop()
+                    _set_play_simulations(False)
                     if not warned:
-                        log_warn("Timeline PLAY detected during startup; forced PAUSE. Click PLAY once the stage finishes loading.")
+                        log_warn("Timeline PLAY detected during startup; forced STOP. Click PLAY once the stage finishes loading.")
                         warned = True
                 else:
                     if STATE.startup_stage_opened:
@@ -1245,10 +2887,47 @@ def run() -> None:
             await omni.kit.app.get_app().next_update_async()
 
         STATE.startup_autostop_done = True
+        print(f"[STARTUP] Timeline guard finished. startup_stage_opened={STATE.startup_stage_opened}, autostop_done=True", flush=True)
+
+    async def _physx_warmup() -> None:
+        """Brief PLAY→STOP cycle to force PhysX scene initialization.
+
+        Without this, the first user PLAY may report is_playing()=True
+        but simulation time stays at 0 and objects don't move.
+        timeline.stop() afterwards reverts all USD transforms to their
+        authored initial state, so the scene is clean for the real PLAY.
+
+        This runs BEFORE timeline hooks are installed, so _start_run()
+        and _reset_episode_runtime() are NOT triggered.
+        """
+        try:
+            timeline = omni.timeline.get_timeline_interface()
+            print("[STARTUP] PhysX warm-up: PLAY...", flush=True)
+            _set_play_simulations(True)
+            timeline.play()
+            # Give PhysX ~10 frames to initialize the scene.
+            app = omni.kit.app.get_app()
+            for _ in range(10):
+                await app.next_update_async()
+            # STOP resets timeline to t=0 and reverts USD transforms.
+            timeline.stop()
+            _set_play_simulations(False)
+            for _ in range(5):
+                await app.next_update_async()
+            print(f"[STARTUP] PhysX warm-up done. is_stopped={timeline.is_stopped()}, "
+                  f"time={timeline.get_current_time():.4f}", flush=True)
+        except Exception as exc:
+            print(f"[STARTUP] PhysX warm-up failed (non-fatal): {exc}", flush=True)
 
     async def _startup_sequence() -> None:
+        print(f"[STARTUP] _startup_sequence() starting. Calling _startup_timeline_guard()...", flush=True)
         await _startup_timeline_guard()
+        print(f"[STARTUP] Guard done. Running PhysX warm-up...", flush=True)
+        await _physx_warmup()
+        _startup_prime_sim_context()
+        print(f"[STARTUP] Installing timeline run hooks...", flush=True)
         _install_timeline_run_hooks()
+        print(f"[STARTUP] Timeline hooks installed. Ready for PLAY.", flush=True)
 
     # Kick startup sequence (do not await; keep UI responsive).
     loop.create_task(_startup_sequence())
@@ -1256,7 +2935,7 @@ def run() -> None:
     render_log()
 
     log_info("UI ready. Click 'Init Camera' once, then click PLAY to start the sim loop.")
-    log_info(f"Cosmos endpoint: {cosmos_endpoint()}")
+    log_info(f"Cosmos endpoint: {cosmos_endpoint() or '<disabled>'}")
     log_info(f"Cosmos model: {COSMOS_MODEL}")
     if not COSMOS_MODEL or COSMOS_MODEL == "your-model-name-here":
         log_warn("COSMOS_MODEL is not set. Update COSMOS_MODEL or set COSMOS_MODEL env var.")

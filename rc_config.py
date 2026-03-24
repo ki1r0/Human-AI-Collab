@@ -1,17 +1,22 @@
 import os
+from urllib.parse import urlparse
+
+from rc_paths import PROJECT_ROOT, TMP_DIR, load_runtime_env_defaults
+
+
+load_runtime_env_defaults()
+
 
 # -----------------------------
 # SETTINGS
 # -----------------------------
-# Mem0 key used by this demo.
-# Intentionally fixed here to avoid stale shell env values from old sessions.
-# Set to empty string to use SQLite fallback (recommended if you don't have a valid mem0 key)
-MEM0_API_KEY = "m0-ipsqlnTToPUmVXdn4DNLzpaZH2RbmCKwwsdOVOws"
+MEM0_API_KEY = (os.getenv("MEM0_API_KEY") or "").strip()
 
 CAMERA_PRIM_PATH = "/Franka/head_camera"  # Copy Prim Path
 TABLE_PRIM_PATH = os.getenv("TABLE_PRIM_PATH", "/World/Table")
 ROBOT_PRIM_PATH = os.getenv("ROBOT_PRIM_PATH", "").strip()  # optional: existing Franka prim path in stage
 ROBOT_PRIM_EXPR = os.getenv("ROBOT_PRIM_EXPR", "").strip()  # optional regex expression to find robot prim(s)
+
 
 # Franka control
 # Enabled by default. Auto-discovers Franka/Panda robot in the scene.
@@ -33,67 +38,139 @@ RESOLUTION = (640, 480)
 IMAGE_FORMAT = "JPEG"
 IMAGE_MIME = "image/jpeg"
 IMAGE_QUALITY = 90
-SAVE_EACH_SENT_FRAME = True  # Re-enabled for debugging (async save via asyncio.to_thread)
+SAVE_EACH_SENT_FRAME = True
 
 # Saved frames
-LAST_FRAME_PATH = "/workspace/IsaacLab/nvidia_tutorial/tmp/isaac_cam_latest.jpg"
-SENT_FRAMES_ROOT = "/workspace/IsaacLab/nvidia_tutorial/tmp/sent_frames"
-MEMORY_ROOT = "/workspace/IsaacLab/nvidia_tutorial/tmp/memory"
-LTM_SQLITE_PATH = os.path.join(MEMORY_ROOT, "ltm.sqlite3")
+_PROJECT_DIR = str(PROJECT_ROOT)
+LAST_FRAME_PATH = str(TMP_DIR / "isaac_cam_latest.jpg")
+SENT_FRAMES_ROOT = str(TMP_DIR / "sent_frames")
+MEMORY_ROOT = str(TMP_DIR / "memory")
+LTM_SQLITE_PATH = str(TMP_DIR / "memory" / "ltm.sqlite3")
 
-# Cosmos / OpenAI-compatible endpoint (same env vars as h1_LLM_demo.py)
-COSMOS_URL = os.getenv("COSMOS_URL", "").strip()  # optional full URL override
-COSMOS_HOST = os.getenv("COSMOS_HOST_IP", "172.17.0.1")
-COSMOS_PORT = int(os.getenv("COSMOS_PORT", "8000"))
-COSMOS_MODEL = os.getenv("COSMOS_MODEL", "/models/Cosmos-Reason2-8B")
-COSMOS_API_KEY = os.getenv("COSMOS_API_KEY", "EMPTY")
-TIMEOUT_SEC = float(os.getenv("COSMOS_TIMEOUT", "20.0"))
+
+def _int_env(name: str, default: int) -> int:
+    raw = str(os.getenv(name, str(default)) or "").strip()
+    try:
+        return int(raw)
+    except Exception:
+        return int(default)
+
+
+def _float_env(name: str, default: float) -> float:
+    raw = str(os.getenv(name, str(default)) or "").strip()
+    try:
+        return float(raw)
+    except Exception:
+        return float(default)
+
+
+COSMOS_BASE_URL = (os.getenv("COSMOS_BASE_URL") or "").strip()
+COSMOS_HOST = (os.getenv("COSMOS_HOST") or os.getenv("COSMOS_HOST_IP") or "").strip()
+COSMOS_PORT = _int_env("COSMOS_PORT", 8000)
+COSMOS_MODEL = (os.getenv("COSMOS_MODEL") or "/models/Cosmos-Reason2-8B").strip()
+COSMOS_API_KEY = (os.getenv("COSMOS_API_KEY") or "").strip()
+TIMEOUT_SEC = _float_env("COSMOS_TIMEOUT", 60.0)
 FORCE_JSON_RESPONSE = os.getenv("FORCE_JSON_RESPONSE", "1").strip() not in ("0", "false", "False")
+COSMOS_MAX_MODEL_LEN = _int_env("COSMOS_MAX_MODEL_LEN", 2048)
+
+
+def _normalize_chat_completions_url(raw: str) -> str:
+    value = str(raw or "").strip()
+    if not value:
+        return ""
+    parsed = urlparse(value)
+    if not parsed.scheme:
+        value = f"http://{value.lstrip('/')}"
+        parsed = urlparse(value)
+    path = parsed.path.rstrip("/")
+    if path.endswith("/v1/chat/completions"):
+        return value.rstrip("/")
+    if path.endswith("/v1"):
+        path = f"{path}/chat/completions"
+    else:
+        path = f"{path}/v1/chat/completions" if path else "/v1/chat/completions"
+    return parsed._replace(path=path).geturl().rstrip("/")
+
+
+def cosmos_chat_completions_url() -> str:
+    explicit = (
+        os.getenv("COSMOS_CHAT_COMPLETIONS_URL")
+        or os.getenv("COSMOS_URL")
+        or ""
+    ).strip()
+    if explicit:
+        return _normalize_chat_completions_url(explicit)
+    if COSMOS_BASE_URL:
+        return _normalize_chat_completions_url(COSMOS_BASE_URL)
+    if COSMOS_HOST:
+        host = COSMOS_HOST
+        if "://" in host:
+            base = host
+        else:
+            base = f"http://{host}"
+        parsed = urlparse(base)
+        netloc = parsed.netloc or parsed.path
+        path = parsed.path if parsed.netloc else ""
+        if ":" not in netloc:
+            netloc = f"{netloc}:{COSMOS_PORT}"
+        return _normalize_chat_completions_url(parsed._replace(netloc=netloc, path=path).geturl())
+    return ""
+
+
+def cosmos_is_configured() -> bool:
+    return bool(cosmos_chat_completions_url() and str(COSMOS_MODEL or "").strip())
+
+
+COSMOS_URL = cosmos_chat_completions_url()
+COSMOS_CHAT_COMPLETIONS_URL = COSMOS_URL
+COSMOS_ENABLED = cosmos_is_configured()
+
+# Commander LLM (cognitive layer)
+COMMANDER_LLM_MODEL = os.getenv("COMMANDER_LLM_MODEL", "gpt-4o").strip()
+COMMANDER_API_KEY = (
+    os.getenv("COMMANDER_API_KEY")
+    or os.getenv("GEMINI_API_KEY")
+    or os.getenv("GOOGLE_API_KEY")
+    or os.getenv("OPENAI_API_KEY")
+    or ""
+).strip()
+COMMANDER_TIMEOUT_SEC = _float_env("COMMANDER_TIMEOUT_SEC", 45.0)
+COMMANDER_BASE_URL = os.getenv("COMMANDER_BASE_URL", "").strip()
+COMMANDER_GEMINI_BASE_URL = os.getenv("COMMANDER_GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta").strip()
 
 MAX_TURNS_TO_KEEP = 12
 MAX_LOG_LINES = 400
 
-# If you truly want ZERO system guidance, keep this None.
 SYSTEM_MSG = None
-# Example if you want slight help:
-# SYSTEM_MSG = "You are a helpful embodied assistant. Use the camera image when provided."
-
-# Prompt for periodic inquiry
 STREAM_DEFAULT_PROMPT = "Describe what you see."
 
 # Capture/inquiry defaults
-CAPTURE_FPS = 5.0  # 0.2s interval
-INQUIRY_INTERVAL_SEC = 1.0  # 1 Hz inquiry
-INQUIRY_FRAME_COUNT = 3  # Reduced from 5 to 3 to fit within 2048 token context limit
+CAPTURE_FPS = 5.0
+INQUIRY_INTERVAL_SEC = 1.0
+INQUIRY_FRAME_COUNT = 3
 FRAME_BUFFER_SECONDS = 2.0
 
 # Agent scheduling
-MIN_INFER_INTERVAL_SEC = float(os.getenv("MIN_INFER_INTERVAL_SEC", "0.8"))
+MIN_INFER_INTERVAL_SEC = _float_env("MIN_INFER_INTERVAL_SEC", 0.8)
 
 # ---------------------------------------------------------------------------
 # Hybrid Theory-of-Mind: GT State Monitor
 # ---------------------------------------------------------------------------
-GT_POSITION_THRESHOLD = float(os.getenv("GT_POSITION_THRESHOLD", "0.02"))  # meters
-GT_ORIENTATION_THRESHOLD = float(os.getenv("GT_ORIENTATION_THRESHOLD", "0.05"))  # radians
-GT_COOLDOWN_SEC = float(os.getenv("GT_COOLDOWN_SEC", "1.0"))  # min time between GT triggers
-RING_BUFFER_CAPACITY = int(os.getenv("RING_BUFFER_CAPACITY", "5"))
-
-# Tracked object prim paths (comma-separated, or empty for auto-discover).
+GT_POSITION_THRESHOLD = _float_env("GT_POSITION_THRESHOLD", 0.02)
+GT_ORIENTATION_THRESHOLD = _float_env("GT_ORIENTATION_THRESHOLD", 0.05)
+GT_COOLDOWN_SEC = _float_env("GT_COOLDOWN_SEC", 2.0)
+RING_BUFFER_CAPACITY = _int_env("RING_BUFFER_CAPACITY", 5)
 GT_TRACKED_PRIMS = [p.strip() for p in os.getenv("GT_TRACKED_PRIMS", "").split(",") if p.strip()]
 
 # ---------------------------------------------------------------------------
 # Robot Control Tuning (AI-CPS industrial-grade values)
 # ---------------------------------------------------------------------------
-# These override the default FRANKA_PANDA_HIGH_PD_CFG values to reduce jitter.
-# Source: IsaacLab Robotiq config + FrankaCabinet benchmark.
-ROBOT_SHOULDER_STIFFNESS = float(os.getenv("ROBOT_SHOULDER_STIFFNESS", "400.0"))
-ROBOT_SHOULDER_DAMPING = float(os.getenv("ROBOT_SHOULDER_DAMPING", "80.0"))
-ROBOT_FOREARM_STIFFNESS = float(os.getenv("ROBOT_FOREARM_STIFFNESS", "400.0"))
-ROBOT_FOREARM_DAMPING = float(os.getenv("ROBOT_FOREARM_DAMPING", "80.0"))
-ROBOT_HAND_STIFFNESS = float(os.getenv("ROBOT_HAND_STIFFNESS", "2000.0"))
-ROBOT_HAND_DAMPING = float(os.getenv("ROBOT_HAND_DAMPING", "100.0"))
-# PhysX solver iterations (higher = more stable, more expensive).
-SOLVER_POSITION_ITERATIONS = int(os.getenv("SOLVER_POSITION_ITERATIONS", "12"))
-SOLVER_VELOCITY_ITERATIONS = int(os.getenv("SOLVER_VELOCITY_ITERATIONS", "1"))
-# Use DifferentialIK as fallback when RMPFlow/Lula is unavailable.
+ROBOT_SHOULDER_STIFFNESS = _float_env("ROBOT_SHOULDER_STIFFNESS", 400.0)
+ROBOT_SHOULDER_DAMPING = _float_env("ROBOT_SHOULDER_DAMPING", 80.0)
+ROBOT_FOREARM_STIFFNESS = _float_env("ROBOT_FOREARM_STIFFNESS", 400.0)
+ROBOT_FOREARM_DAMPING = _float_env("ROBOT_FOREARM_DAMPING", 80.0)
+ROBOT_HAND_STIFFNESS = _float_env("ROBOT_HAND_STIFFNESS", 2000.0)
+ROBOT_HAND_DAMPING = _float_env("ROBOT_HAND_DAMPING", 100.0)
+SOLVER_POSITION_ITERATIONS = _int_env("SOLVER_POSITION_ITERATIONS", 12)
+SOLVER_VELOCITY_ITERATIONS = _int_env("SOLVER_VELOCITY_ITERATIONS", 1)
 PREFER_DIFFIK = os.getenv("PREFER_DIFFIK", "0").strip() not in ("0", "false", "False")

@@ -9,6 +9,7 @@ __pycache__/
 env/
 venv/
 ENV/
+.venv/
 
 # IDE
 .vscode/
@@ -23,6 +24,24 @@ ENV/
 # Temporary files
 tmp/
 *.tmp
+*.bak
+*.usd.bak*
+assets/*validate*.usd
+assets/hubbolt_validate_*.usd
+assets/task_validate*.usd
+
+# Local runtime config overrides
+config/runtime_env.local.env
+config/runtime_env.local.sh
+
+# Local scratch / generated notes
+docs/changes_cc/
+docs/changes_codex/
+tmp_analyze_shafts.py
+
+# Test / tool caches
+.pytest_cache/
+tests/__pycache__/
 
 # OS
 .DS_Store
@@ -30,3 +49,7 @@ Thumbs.db
 
 # Isaac Sim specific
 *.pyc
+
+# Docker / compose local env
+.env
+.env.local

@@ -1,0 +1,14 @@
+#usda 1.0
+(
+    defaultPrim = "Orange_01"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "Orange_01"
+{
+    def Sphere "body"
+    {
+        double radius = 1.0
+    }
+}

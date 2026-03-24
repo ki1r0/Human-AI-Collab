@@ -1,0 +1,38 @@
+#usda 1.0
+(
+    defaultPrim = "SimpleRoomShell"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "SimpleRoomShell"
+{
+    def Cube "floor"
+    {
+        double size = 1
+        double3 xformOp:translate = (0.0, 0.0, -0.05)
+        double3 xformOp:scale = (4.0, 4.0, 0.05)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+    }
+    def Cube "wall_back"
+    {
+        double size = 1
+        double3 xformOp:translate = (0.0, 2.0, 1.2)
+        double3 xformOp:scale = (4.0, 0.05, 1.2)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+    }
+    def Cube "wall_left"
+    {
+        double size = 1
+        double3 xformOp:translate = (-2.0, 0.0, 1.2)
+        double3 xformOp:scale = (0.05, 4.0, 1.2)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+    }
+    def Cube "wall_right"
+    {
+        double size = 1
+        double3 xformOp:translate = (2.0, 0.0, 1.2)
+        double3 xformOp:scale = (0.05, 4.0, 1.2)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+    }
+}

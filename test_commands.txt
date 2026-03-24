@@ -1,0 +1,18 @@
+/combine("Hub_Cover_Output","Casing_Top","plug_main","socket_hub_output")
+/combine("Hub_Cover_Input","Casing_Top","plug_main","socket_hub_input")
+/combine("Hub_Cover_Small","Casing_Top","plug_main","socket_hub_small")
+/combine("M6_Hub_Bolt","Casing_Top","plug_main","socket_bolt_hub_1")
+
+/combine("Transfer_Shaft", "Casing_Base", "plug_main", "socket_gear_transfer")
+/combine("Input_Shaft", "Casing_Base", "plug_main", "socket_gear_input")
+/combine("Output_Shaft", "Casing_Base", "plug_main", "socket_gear_output")
+
+/combine_input_shaft
+/combine_transfer_shaft
+/combine_output_shaft
+
+/combine_casing_top
+/combine_casing_base
+
+/combine("Casing_Top","Casing_Base","plug_casing_mate","socket_casing_mate")
+/combine_casing_bolt

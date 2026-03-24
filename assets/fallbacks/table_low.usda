@@ -1,0 +1,45 @@
+#usda 1.0
+(
+    defaultPrim = "table_low_327"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "table_low_327"
+{
+    def Cube "tabletop"
+    {
+        double size = 1
+        double3 xformOp:translate = (0.0, 0.0, 0.44)
+        double3 xformOp:scale = (1.1, 0.8, 0.06)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+    }
+    def Cube "leg_1"
+    {
+        double size = 1
+        double3 xformOp:translate = (0.9, 0.6, 0.2)
+        double3 xformOp:scale = (0.08, 0.08, 0.4)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+    }
+    def Cube "leg_2"
+    {
+        double size = 1
+        double3 xformOp:translate = (-0.9, 0.6, 0.2)
+        double3 xformOp:scale = (0.08, 0.08, 0.4)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+    }
+    def Cube "leg_3"
+    {
+        double size = 1
+        double3 xformOp:translate = (0.9, -0.6, 0.2)
+        double3 xformOp:scale = (0.08, 0.08, 0.4)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+    }
+    def Cube "leg_4"
+    {
+        double size = 1
+        double3 xformOp:translate = (-0.9, -0.6, 0.2)
+        double3 xformOp:scale = (0.08, 0.08, 0.4)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+    }
+}

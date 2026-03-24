@@ -1,0 +1,64 @@
+services:
+  hac:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: ${ISAACLAB_BASE_IMAGE:-nvcr.io/nvidia/isaac-lab:latest}
+    image: ${HAC_IMAGE_NAME:-human-ai-collab:latest}
+    working_dir: /workspace/Human-AI-Collab
+    stdin_open: true
+    tty: true
+    ipc: host
+    shm_size: "2g"
+    network_mode: host
+    gpus: all
+    env_file:
+      - config/runtime_env.env
+    environment:
+      COMMANDER_API_KEY: ${COMMANDER_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      MEM0_API_KEY: ${MEM0_API_KEY:-}
+      COMMANDER_LLM_MODEL: ${COMMANDER_LLM_MODEL:-gemini-2.5-flash}
+      COSMOS_BASE_URL: ${COSMOS_BASE_URL:-}
+      COSMOS_CHAT_COMPLETIONS_URL: ${COSMOS_CHAT_COMPLETIONS_URL:-}
+      COSMOS_MODEL: ${COSMOS_MODEL:-/models/Cosmos-Reason2-8B}
+      COSMOS_API_KEY: ${COSMOS_API_KEY:-}
+      COSMOS_TIMEOUT: ${COSMOS_TIMEOUT:-60}
+      HAC_PREFER_LOCAL_SCENE_ASSETS: ${HAC_PREFER_LOCAL_SCENE_ASSETS:-1}
+      HAC_AUTO_DOWNLOAD_SCENE_ASSETS: ${HAC_AUTO_DOWNLOAD_SCENE_ASSETS:-0}
+      HAC_ENABLE_ROOM_SHELL_FALLBACK: ${HAC_ENABLE_ROOM_SHELL_FALLBACK:-0}
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-0}
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
+      NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-all}
+      DISPLAY: ${DISPLAY:-}
+      QT_X11_NO_MITSHM: "1"
+      ACCEPT_EULA: ${ACCEPT_EULA:-Y}
+      PRIVACY_CONSENT: ${PRIVACY_CONSENT:-Y}
+      OMNI_KIT_ACCEPT_EULA: ${OMNI_KIT_ACCEPT_EULA:-Y}
+      ISAACLAB_ROOT: ${ISAACLAB_ROOT:-/isaac-sim}
+      ISAACLAB_LAUNCHER: ${ISAACLAB_LAUNCHER:-/isaac-sim/isaaclab.sh}
+    volumes:
+      - .:/workspace/Human-AI-Collab
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - isaac-kit-cache:/isaac-sim/kit/cache
+      - isaac-kit-logs:/root/.nvidia-omniverse/logs
+      - isaac-ov-cache:/root/.cache/ov
+      - isaac-packman-cache:/root/.cache/packman
+      - isaac-pip-cache:/root/.cache/pip
+      - isaac-ov-data:/root/.local/share/ov/data
+      - isaac-glcache:/root/.cache/nvidia/GLCache
+      - isaac-compute-cache:/root/.nv/ComputeCache
+    command: ["/workspace/Human-AI-Collab/docker/run_demo.sh"]
+
+volumes:
+  isaac-kit-cache:
+  isaac-kit-logs:
+  isaac-ov-cache:
+  isaac-packman-cache:
+  isaac-pip-cache:
+  isaac-ov-data:
+  isaac-glcache:
+  isaac-compute-cache:

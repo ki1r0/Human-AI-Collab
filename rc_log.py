@@ -1,6 +1,9 @@
 import time
 
-import carb
+try:
+    import carb  # type: ignore
+except ImportError:  # pragma: no cover - Isaac Sim runtime optional for pure-Python checks
+    carb = None
 
 from rc_state import STATE
 
@@ -23,18 +26,29 @@ def log_line(prefix, msg):
     line = f"[{ts}] {prefix} {msg}"
     STATE.log_lines.append(line)
     render_log()
+    if STATE.log_label is None:
+        print(line, flush=True)
 
 
 def log_info(msg):
     log_line("INFO ", str(msg))
-    carb.log_info(str(msg))
+    if carb is not None:
+        carb.log_info(str(msg))
+    else:
+        print(f"[INFO] {msg}", flush=True)
 
 
 def log_warn(msg):
     log_line("WARN ", str(msg))
-    carb.log_warn(str(msg))
+    if carb is not None:
+        carb.log_warn(str(msg))
+    else:
+        print(f"[WARN] {msg}", flush=True)
 
 
 def log_error(msg):
     log_line("ERROR", str(msg))
-    carb.log_error(str(msg))
+    if carb is not None:
+        carb.log_error(str(msg))
+    else:
+        print(f"[ERROR] {msg}", flush=True)

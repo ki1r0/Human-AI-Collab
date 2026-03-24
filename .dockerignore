@@ -1,0 +1,14 @@
+.git
+.gitignore
+__pycache__/
+*.py[cod]
+*.log
+tmp/
+.pytest_cache/
+tests/__pycache__/
+docs/changes_cc/
+docs/changes_codex/
+config/runtime_env.local.env
+config/runtime_env.local.sh
+.env
+.env.*

@@ -36,6 +36,9 @@ class State:
         self.last_frame_path = LAST_FRAME_PATH
         self.sent_frames_root = SENT_FRAMES_ROOT
         self.sent_frames_dir = SENT_FRAMES_ROOT
+        # Pre-play frame directory prepared by "Initiate Cosmos" so grounding and
+        # the subsequent run can share the same sent_frames folder.
+        self.pending_run_frames_dir = ""
 
         self.playing = False
         self.run_active = False
@@ -46,6 +49,7 @@ class State:
         self.frame_buffer = deque(maxlen=max(1, int(CAPTURE_FPS * FRAME_BUFFER_SECONDS)))
         self.capture_task = None
         self.inquiry_task = None
+        self.run_bootstrap_task = None
 
         # Cosmos connection state
         self.cosmos_state = None  # None = unknown, True = connected, False = failed
@@ -54,10 +58,15 @@ class State:
         # VLM request guard
         self.vlm_busy = False
         self.vlm_busy_since = 0.0
+        self.vlm_busy_trigger = ""    # "auto"|"user"|"gt_change"|"grounding" — what triggered current busy
         self.pause_inquiry_until = 0.0
+        self.manual_pending = False   # True while a manual (user) request is in-flight
         self.last_vlm_response = ""
         self.last_infer_time = 0.0
         self.last_auto_infer_ts = 0.0
+
+        # VLM status indicator (UI label set in build_ui)
+        self.vlm_status_label = None
 
         # Theory-of-Mind / cognition modules (optional)
         self.belief_manager = None
@@ -75,6 +84,9 @@ class State:
         self.robot_controller = None
         self.robot_update_task = None
 
+        # Magic (kinematic) assembly manager
+        self.magic_assembly = None
+
         # Hybrid ToM: GT state monitor + ring buffer
         self.state_monitor = None
         self.ring_buffer = None
@@ -87,6 +99,24 @@ class State:
         # Startup guard: prevent any unintended auto-play until stage is ready.
         self.startup_stage_opened = False
         self.startup_autostop_done = False
+
+        # Bootstrap recovery guard: when True, timeline STOP events are ignored
+        # so that the bootstrap stop→play recovery cycle is not interrupted.
+        self._bootstrap_recovery = False
+
+        # One-shot static initialization (Initiate Cosmos grounding).
+        # grounding_in_progress: True while the first VLM grounding call is in-flight.
+        # grounding_complete: True once the grounding response has been received and
+        #                     ShortTermMemory has been populated.
+        self.grounding_in_progress = False
+        self.grounding_complete = False
+
+        # UI label that shows "Initializing..." / "Ready" / "Ready (no init)" near
+        # the Initiate Cosmos button.  Set by build_ui(); updated by on_initiate_cosmos()
+        # and _worker_poll_loop().
+        self.init_status_label = None
+        # Reference to the PLAY button so it can be disabled during grounding.
+        self.play_button = None
 
 
 STATE = State()
