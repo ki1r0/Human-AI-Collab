@@ -44,6 +44,8 @@ find_launcher() {
     "${ISAACLAB_LAUNCHER:-}" \
     "${ISAACLAB_ROOT:-}/isaaclab.sh" \
     "/isaac-sim/isaaclab.sh" \
+    "/workspace/isaaclab/isaaclab.sh" \
+    "/workspace/IsaacLab/isaaclab.sh" \
     "${SCRIPT_DIR}/../isaaclab.sh" \
     "${SCRIPT_DIR}/../../isaaclab.sh"
   do

@@ -20,6 +20,9 @@ ENV/
 
 # Logs
 *.log
+validation_logs/
+core
+core.*
 
 # Temporary files
 tmp/

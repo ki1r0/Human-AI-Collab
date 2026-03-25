@@ -1,155 +1,100 @@
-# Human-AI-Collab: Isaac Sim + Cosmos Reason2-8B Cognitive Robot Demo
+# Human-AI-Collab
 
-A cognitive robotics demonstration integrating NVIDIA Isaac Sim 5.1.0 with Cosmos Reason2-8B Vision Language Model (VLM) for autonomous object manipulation and reasoning.
+Human-AI-Collab is a Docker-first project layer on top of NVIDIA Isaac Sim / Isaac Lab.
+It provides the demo scene, UI, agent pipeline, and robot-task logic for the Human-AI collaboration demo.
 
-## Overview
+This repo is not a standalone simulator or runtime.
+You still need access to an official Isaac Sim / Isaac Lab base image and a Linux host with an NVIDIA GPU.
 
-This project implements a two-phase grounding architecture where a VLM agent:
-- Perceives the environment through multi-frame temporal vision
-- Reasons about object states and dynamics
-- Plans and executes manipulation tasks
-- Maintains short-term and long-term memory
+## What This Repo Contains
 
-## Features
+- A Franka-based demo scene and startup path
+- The custom UI and runtime control flow
+- Commander-driven reasoning / control integration
+- Optional Cosmos integration
+- Local scene hygiene fixes so the demo starts without broken decorative-material references
 
-- **Vision-Language Integration**: Cosmos Reason2-8B VLM for scene understanding
-- **Temporal Perception**: Multi-frame buffer for motion analysis
-- **Belief Tracking**: Ground-truth state monitoring with confidence scores
-- **Robot Control**: Franka Panda arm with IK-based motion planning
-- **Memory System**: Short-term (working memory) + Long-term (Mem0 API)
-- **Interactive UI**: Real-time visualization and manual control
+## Prerequisites
 
-## Requirements
+- Linux host
+- NVIDIA GPU and working NVIDIA driver stack
+- Docker
+- NVIDIA Container Toolkit / Docker GPU runtime
+- Access to a valid Isaac Sim / Isaac Lab base image, for example an NGC image you can pull locally
 
-- NVIDIA Isaac Sim 5.1.0
-- IsaacLab framework
-- Python 3.10+
-- NVIDIA RTX GPU (tested on A5000)
-- Cosmos Reason2-8B model server (vLLM or compatible)
+## Required And Optional Config
 
-## Installation
+Required:
+- `ISAACLAB_BASE_IMAGE`
+- `COMMANDER_API_KEY`
 
-1. Install [Isaac Sim 5.1.0](https://developer.nvidia.com/isaac-sim)
-2. Install IsaacLab:
+Optional:
+- `COSMOS_BASE_URL` or `COSMOS_CHAT_COMPLETIONS_URL`
+- `COSMOS_API_KEY`
+- `MEM0_API_KEY`
+- `ISAACLAB_LAUNCHER` if your base image does not expose the usual launcher locations
+
+The repo includes:
+- [`.env.example`](.env.example)
+- [`config/runtime_env.example`](config/runtime_env.example)
+
+## Quickstart
+
+1. Clone the repo and enter it.
    ```bash
-   git clone https://github.com/isaac-sim/IsaacLab.git
-   cd IsaacLab
-   ./isaaclab.sh --install
-   ```
-3. Clone this repo anywhere convenient:
-   ```bash
-   git clone https://github.com/ki1r0/Human-AI-Collab.git
+   git clone <your-fork-or-local-copy> Human-AI-Collab
    cd Human-AI-Collab
    ```
-4. Install dependencies:
+2. Copy the Docker env template.
    ```bash
-   pip install -r requirements.txt
+   cp .env.example .env
+   ```
+3. Edit `.env`:
+   - Set `ISAACLAB_BASE_IMAGE` to the exact image tag you can pull
+   - Set `COMMANDER_API_KEY`
+   - Optionally set a Cosmos endpoint
+4. Log in to NGC if the base image is hosted on `nvcr.io`.
+   ```bash
+   docker login nvcr.io
+   ```
+5. Build the container image.
+   ```bash
+   docker compose build
+   ```
+6. Launch the demo.
+   ```bash
+   docker compose up hac
+   ```
+7. Stop the stack when finished.
+   ```bash
+   docker compose down
    ```
 
-## Configuration
+Cosmos is optional.
+If no Cosmos endpoint is configured, the app logs that it is bypassing Cosmos and continues on the commander-only path.
 
-Set runtime environment in `config/runtime_env.env` / `config/runtime_env.local.*`.
+## GUI / X11 Notes
 
-Key environment variables:
-- `COMMANDER_API_KEY`: required higher-level LLM key
-- `COSMOS_BASE_URL` or `COSMOS_CHAT_COMPLETIONS_URL`: optional Cosmos endpoint
-- `COSMOS_MODEL`: Model path (default: /models/Cosmos-Reason2-8B)
-- `MEM0_API_KEY`: Long-term memory API key
+- This repo expects the base Isaac runtime to provide the GUI stack.
+- On Linux with X11 forwarding, you may need:
+  ```bash
+  xhost +local:root
+  ```
+- If the app starts but no window appears, verify `DISPLAY`, `/tmp/.X11-unix`, NVIDIA Container Toolkit, and host GPU access first.
 
-## Usage
+## Known Limitations
 
-### Launch the Demo
+- The project depends on an external Isaac Sim / Isaac Lab runtime image; this repo does not vendor that runtime.
+- GUI startup still depends on host X11 / display configuration.
+- Cosmos-enabled validation requires a real endpoint; if unset, that path is intentionally skipped.
 
-```bash
-./run_main.sh
-```
+## Additional Docs
 
-### UI Controls
+- Docker quickstart: [docs/docker_run.md](docs/docker_run.md)
+- AI-assistant setup prompt: [docs/setup_with_ai_assistant.md](docs/setup_with_ai_assistant.md)
 
-- **PLAY/PAUSE**: Start/stop physics simulation
-- **Auto Mode**: Enable autonomous VLM decision-making
-- **Manual Query**: Send custom prompts with current frames
-- **Teleport Objects**: Reset scene configuration
-- **Ghost Mode**: Visualize planned trajectories
+## Maintainer Note Before Public Release
 
-## Project Structure
-
-```
-Human-AI-Collab/
-|-- main.py                  # Entry point
-|-- rc_ui.py                  # Entry point (GUI, Kit event loop)
-|-- rc_config.py              # All configuration constants
-|-- rc_state.py               # Global runtime state
-|-- rc_log.py                 # Logging utilities
-|
-|-- agent/                    # VLM reasoning + decision pipeline
-|   |-- reason2.py            #   Cosmos Reason2-8B VLM calls + token budget
-|   |-- graph.py              #   LangGraph agent state machine
-|   |-- worker.py             #   Background worker thread
-|   +-- parser.py             #   JSON response parsing
-|
-|-- sensor/                   # Perception + camera
-|   |-- camera.py             #   Replicator RGB capture (sync + async)
-|   |-- perception.py         #   Ground-truth state monitor
-|   +-- vlm.py                #   VLM connection testing utilities
-|
-|-- belief/                   # World state tracking
-|   |-- manager.py            #   Belief state manager (object hypotheses)
-|   +-- ghost_visualizer.py   #   USD ghost prim visualization
-|
-|-- memory/                   # Short-term + long-term memory
-|   |-- short_term.py         #   In-memory working memory (TTL-based)
-|   +-- long_term.py          #   SQLite + Mem0 episodic memory
-|
-|-- control/                  # Robot motion control
-|   |-- franka.py             #   Franka Panda IK controller
-|   +-- robot.py              #   High-level robot commands
-|
-|-- assets/                   # USD scenes and robot models
-|   |-- simple_room_scene.usd
-|   |-- AI_robot.usd
-|   +-- mock_robot.usd
-|
-|-- docs/                     # Architecture and debugging notes
-|   |-- TWO_PHASE_GROUNDING.md
-|   |-- CONTEXT_LENGTH_FIX.md
-|   |-- FIXES_APPLIED.md
-|   +-- ROBOT_CONTROL_TEST.md
-|
-+-- tests/                    # Verification scripts
-    |-- verify_sim_tick.py
-    +-- verify_to_torch.py
-```
-
-## Architecture
-
-**Two-Phase Grounding:**
-1. **Initialization Phase**: VLM builds scene graph from multi-view images
-2. **Runtime Phase**: VLM reasons with temporal frames + ground-truth belief state
-
-**Token Budget Management:**
-- Context limit: 2048 tokens (Reason2-8B)
-- Dynamic max_tokens adjustment based on input estimation
-- Image encoding: ~350 tokens/image
-- Calibrated text estimation: chars/5
-
-## Documentation
-
-- [docs/TWO_PHASE_GROUNDING.md](docs/TWO_PHASE_GROUNDING.md) - Two-phase perception architecture
-- [docs/CONTEXT_LENGTH_FIX.md](docs/CONTEXT_LENGTH_FIX.md) - Token budget management
-- [docs/FIXES_APPLIED.md](docs/FIXES_APPLIED.md) - Bug fix history
-- [docs/ROBOT_CONTROL_TEST.md](docs/ROBOT_CONTROL_TEST.md) - Robot controller testing
-
-## Known Issues
-
-- **Python Module Caching**: After editing IsaacLab source files, restart Isaac Sim
-- **Token Estimation**: Slightly conservative (safety margin 20 tokens)
-- **Mem0 API**: Requires valid API key for long-term memory persistence
-
-## Performance
-
-Tested on:
-- GPU: NVIDIA RTX A5000
-- Isaac Sim 5.1.0 (headless/GUI modes)
-- VLM inference: ~4s per query (3 frames)
-- Frame capture: 30 FPS -> 3 FPS temporal sampling
+- Any provider keys that were ever exposed during development must be rotated outside this repo before publication.
+- If git history contains secret material, clean that history before any public GitHub release.
+- Do not commit `.env`, `config/runtime_env.local.*`, or any live credentials.

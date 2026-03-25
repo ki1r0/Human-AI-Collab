@@ -23,6 +23,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 simulation_app = None
+_REQUIRED_STARTUP_PRIMS = ("/Franka", "/Franka/head_camera")
 
 
 def _apply_scene_fallbacks() -> None:
@@ -36,12 +37,64 @@ def _apply_scene_fallbacks() -> None:
             return
         result = apply_local_scene_fallbacks(stage, logger=print)
         if result.get("changed"):
-            print(
-                f"[ASSET] Applied {result['changed']} local scene fallback(s); skipped {result.get('skipped', 0)} already-resolved prim(s).",
-                flush=True,
-            )
+            details = []
+            if result.get("unresolved_replaced"):
+                details.append(f"replaced {result['unresolved_replaced']} broken asset subtree(s)")
+            if result.get("nested_rigid_bodies_disabled"):
+                details.append(
+                    f"disabled {result['nested_rigid_bodies_disabled']} nested rigid body(ies)"
+                )
+            detail_text = f" ({'; '.join(details)})" if details else ""
+            print(f"[ASSET] Applied {result['changed']} scene fallback/hygiene change(s){detail_text}.", flush=True)
     except Exception as exc:
         print(f"[WARN] Scene fallback setup skipped: {exc}", flush=True)
+
+
+def _validate_startup_stage(stage, scene_path: str) -> None:
+    if stage is None:
+        raise RuntimeError(f"USD stage is None after opening {scene_path}")
+    if not stage.GetPseudoRoot().IsValid():
+        raise RuntimeError(f"USD stage is invalid after opening {scene_path}")
+
+    missing_prims = []
+    for prim_path in _REQUIRED_STARTUP_PRIMS:
+        prim = stage.GetPrimAtPath(prim_path)
+        if prim is None or not prim.IsValid():
+            missing_prims.append(prim_path)
+    if missing_prims:
+        joined = ", ".join(missing_prims)
+        raise RuntimeError(f"scene {scene_path} is missing required prim(s): {joined}")
+
+
+def _open_startup_stage(scene_path: str) -> None:
+    if simulation_app is None:
+        raise RuntimeError("simulation_app is not initialized")
+
+    import omni.timeline
+    import omni.usd
+
+    stage_path = os.path.abspath(scene_path)
+    usd_context = omni.usd.get_context()
+    if not usd_context.open_stage(stage_path):
+        raise RuntimeError(f"omni.usd.get_context().open_stage({stage_path!r}) returned False")
+
+    for _ in range(60):
+        simulation_app.update()
+        stage = usd_context.get_stage()
+        if stage is None:
+            continue
+        _apply_scene_fallbacks()
+        _validate_startup_stage(stage, stage_path)
+        print(f"[STARTUP] Opened USD stage: {stage_path}", flush=True)
+        print("[STARTUP] Validated required prims: /Franka, /Franka/head_camera", flush=True)
+        try:
+            omni.timeline.get_timeline_interface().stop()
+        except Exception:
+            pass
+        return
+
+    stage = usd_context.get_stage()
+    _validate_startup_stage(stage, stage_path)
 
 
 try:
@@ -92,19 +145,13 @@ except ModuleNotFoundError:
         pass
 
     try:
-        import isaaclab.sim as sim_utils
-
         if args.usd:
-            sim_utils.open_stage(os.path.abspath(args.usd))
-            _apply_scene_fallbacks()
-            try:
-                import omni.timeline
-
-                omni.timeline.get_timeline_interface().stop()
-            except Exception:
-                pass
+            _open_startup_stage(args.usd)
     except Exception as exc:
-        print(f"[WARN] Failed to open USD stage: {exc}", flush=True)
+        print(f"[ERROR] Failed to open startup USD stage: {exc}", flush=True)
+        if simulation_app is not None:
+            simulation_app.close()
+        raise SystemExit(1) from exc
 
 _PROJECT_PACKAGES = ("rc_ui", "rc_config", "rc_state", "rc_log", "agent", "sensor", "belief", "memory", "control")
 for _name in list(sys.modules.keys()):

@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=nvcr.io/nvidia/isaac-lab:latest
+ARG BASE_IMAGE=nvcr.io/nvidia/isaac-lab:2.3.0
 FROM ${BASE_IMAGE}
 
 SHELL ["/bin/bash", "-lc"]
@@ -11,9 +11,11 @@ WORKDIR ${HAC_REPO_ROOT}
 
 COPY requirements.txt /tmp/hac-requirements.txt
 RUN if [[ -x /isaac-sim/python.sh ]]; then \
-        /isaac-sim/python.sh -m pip install --no-cache-dir -r /tmp/hac-requirements.txt; \
+        mkdir -p /isaac-sim/python_packages; \
+        /isaac-sim/python.sh -m pip install --no-cache-dir --target /isaac-sim/python_packages -r /tmp/hac-requirements.txt; \
     elif command -v python3 >/dev/null 2>&1; then \
-        python3 -m pip install --no-cache-dir -r /tmp/hac-requirements.txt; \
+        mkdir -p /opt/hac-python; \
+        python3 -m pip install --no-cache-dir --target /opt/hac-python -r /tmp/hac-requirements.txt; \
     else \
         echo "[ERROR] No usable Python runtime found in base image." >&2; exit 1; \
     fi

@@ -1,46 +1,57 @@
-# Docker run path
+# Docker Quickstart
 
-This project is packaged as a layer on top of an official Isaac Sim / Isaac Lab runtime image.
+Human-AI-Collab runs inside a container built on top of an official Isaac Sim / Isaac Lab image.
 
 ## Prerequisites
-- Linux host with NVIDIA GPU drivers working with Docker
-- Docker with GPU support (`nvidia-container-toolkit`)
-- Access to the chosen Isaac Sim / Isaac Lab container image
-- `COMMANDER_API_KEY` configured at runtime
+
+- Linux
+- NVIDIA GPU with working drivers
+- Docker
+- NVIDIA Container Toolkit
+- Access to a valid Isaac Sim / Isaac Lab base image
+- `COMMANDER_API_KEY`
 
 ## Setup
-0. Authenticate to NGC if your base image is hosted on `nvcr.io`:
-```bash
-docker login nvcr.io
-```
-1. Copy `.env.example` to `.env`
-2. Set `ISAACLAB_BASE_IMAGE` to the exact official Isaac Lab / Isaac Sim image tag you can access
-3. Set `COMMANDER_API_KEY`
-4. If you use Cosmos, set `COSMOS_BASE_URL` or `COSMOS_CHAT_COMPLETIONS_URL`
-5. If your Isaac Lab launcher is not `/isaac-sim/isaaclab.sh`, override `ISAACLAB_LAUNCHER`
 
-## Build
+1. Log in to NGC if needed:
+   ```bash
+   docker login nvcr.io
+   ```
+2. Copy the env template:
+   ```bash
+   cp .env.example .env
+   ```
+3. Edit `.env`:
+   - Set `ISAACLAB_BASE_IMAGE`
+   - Set `COMMANDER_API_KEY`
+   - Optionally set `COSMOS_BASE_URL` or `COSMOS_CHAT_COMPLETIONS_URL`
+   - Only set `ISAACLAB_LAUNCHER` if auto-detection does not match your image
+
+## Build And Run
+
 ```bash
 docker compose build
-```
-
-## Run the demo
-```bash
 docker compose up hac
 ```
 
-For X11 GUI forwarding on Linux, you may also need:
-```bash
-xhost +local:root
-```
+The repo is mounted at `/workspace/Human-AI-Collab` inside the container.
 
-## Open a shell inside the runtime
+To open an interactive shell in the same runtime:
+
 ```bash
 docker compose run --rm hac bash
 ```
 
 ## Notes
+
 - `COMMANDER_API_KEY` is required.
-- Cosmos is optional. If unset, the app bypasses Cosmos cleanly.
-- The project runs from `/workspace/Human-AI-Collab` inside the container.
-- The compose file mounts persistent Isaac Sim / Omniverse caches using named volumes.
+- Cosmos is optional.
+- If Cosmos is unset, startup logs that Cosmos is bypassed.
+- The compose stack uses named volumes for Isaac / Omniverse caches.
+- On X11 hosts, `xhost +local:root` may be required before launch.
+
+## Troubleshooting
+
+- If the GUI fails to appear, verify `DISPLAY` and `/tmp/.X11-unix` forwarding first.
+- If the container cannot access the GPU, validate Docker GPU support with a known-good NVIDIA container before debugging this repo.
+- If the base image tag cannot be pulled, confirm your NGC access and the exact image tag in `.env`.

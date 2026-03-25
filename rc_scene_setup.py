@@ -24,6 +24,10 @@ FRANKA_FALLBACK_ASSET = "fallbacks/mock_franka.usda"
 ROOM_SHELL_ASSET = "fallbacks/simple_room_shell.usda"
 LOCAL_MIRROR_ROOT = ASSETS_DIR / "vendor" / "remote_mirror"
 USD_EXTENSIONS = {".usd", ".usda", ".usdc", ".usdz"}
+KNOWN_NESTED_RIGID_BODIES: Dict[str, str] = {
+    "/Root/Output_Shaft/Output_Gear": "/Root/Output_Shaft",
+    "/Root/Transfer_Shaft/Transfer_Gear": "/Root/Transfer_Shaft",
+}
 
 
 def _bool_env(name: str, default: bool) -> bool:
@@ -195,6 +199,106 @@ def _collect_remote_targets(stage) -> List[Tuple[str, str, str]]:
     return targets
 
 
+def _iter_asset_values(value) -> Iterator[object]:
+    try:
+        from pxr import Sdf
+    except Exception:
+        return
+
+    if isinstance(value, Sdf.AssetPath):
+        yield value
+        return
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            if isinstance(item, Sdf.AssetPath):
+                yield item
+
+
+def _unresolved_asset_paths_under(stage, root_prim_path: str) -> List[Tuple[str, str, str]]:
+    findings: List[Tuple[str, str, str]] = []
+    prefix = root_prim_path.rstrip("/") + "/"
+    for prim in stage.Traverse():
+        prim_path = prim.GetPath().pathString
+        if prim_path != root_prim_path and not prim_path.startswith(prefix):
+            continue
+        for attr in prim.GetAttributes():
+            try:
+                values = list(_iter_asset_values(attr.Get()))
+            except Exception:
+                continue
+            for asset in values:
+                raw_path = str(getattr(asset, "path", "") or "").strip()
+                if not raw_path:
+                    continue
+                resolved = str(getattr(asset, "resolvedPath", "") or "").strip()
+                if resolved:
+                    continue
+                findings.append((prim_path, attr.GetName(), raw_path))
+    return findings
+
+
+def _disable_nested_rigid_bodies(stage, logger: Callable[[str], None]) -> int:
+    try:
+        from pxr import UsdPhysics
+    except Exception as exc:
+        logger(f"[PHYSICS][WARN] Nested rigid-body cleanup skipped: {exc}")
+        return 0
+
+    def _disable_rigid_body(prim, parent_path: str) -> int:
+        if prim is None or not prim.IsValid():
+            return 0
+        changed = False
+        for api_schema in (UsdPhysics.RigidBodyAPI, UsdPhysics.MassAPI):
+            try:
+                if prim.HasAPI(api_schema) and prim.RemoveAPI(api_schema):
+                    changed = True
+            except Exception:
+                continue
+
+        if not changed:
+            rigid_api = UsdPhysics.RigidBodyAPI.Get(stage, prim.GetPath())
+            if not rigid_api:
+                rigid_api = UsdPhysics.RigidBodyAPI.Apply(prim)
+            enabled_attr = rigid_api.GetRigidBodyEnabledAttr()
+            if not enabled_attr or not enabled_attr.IsValid():
+                enabled_attr = rigid_api.CreateRigidBodyEnabledAttr()
+            if enabled_attr.Get() is not False:
+                enabled_attr.Set(False)
+                changed = True
+
+        if changed:
+            logger(f"[PHYSICS] Removed nested rigid body from {prim.GetPath()} under {parent_path}")
+            return 1
+        return 0
+
+    def _rigid_body_enabled(prim) -> bool:
+        if not prim or not prim.IsValid() or not prim.HasAPI(UsdPhysics.RigidBodyAPI):
+            return False
+        rigid_api = UsdPhysics.RigidBodyAPI.Get(stage, prim.GetPath())
+        enabled_attr = rigid_api.GetRigidBodyEnabledAttr()
+        if enabled_attr and enabled_attr.IsValid():
+            value = enabled_attr.Get()
+            if value is False:
+                return False
+        return True
+
+    disabled = 0
+    for child_path, parent_path in KNOWN_NESTED_RIGID_BODIES.items():
+        child_prim = stage.GetPrimAtPath(child_path)
+        disabled += _disable_rigid_body(child_prim, parent_path)
+
+    for prim in stage.Traverse():
+        if not _rigid_body_enabled(prim):
+            continue
+        ancestor = prim.GetParent()
+        while ancestor and ancestor.IsValid():
+            if _rigid_body_enabled(ancestor):
+                disabled += _disable_rigid_body(prim, ancestor.GetPath())
+                break
+            ancestor = ancestor.GetParent()
+    return disabled
+
+
 def apply_local_scene_fallbacks(stage, *, logger: Callable[[str], None] = print) -> Dict[str, int]:
     prefer_local = _bool_env("HAC_PREFER_LOCAL_SCENE_ASSETS", True)
     auto_download = _bool_env("HAC_AUTO_DOWNLOAD_SCENE_ASSETS", True)
@@ -202,6 +306,7 @@ def apply_local_scene_fallbacks(stage, *, logger: Callable[[str], None] = print)
     changed = 0
     skipped = 0
     mirrored = 0
+    unresolved_replaced = 0
 
     visited: set[str] = set()
     targets = _collect_remote_targets(stage)
@@ -238,6 +343,20 @@ def apply_local_scene_fallbacks(stage, *, logger: Callable[[str], None] = print)
             room_shell_needed = True
         skipped += 1
 
+    for prim_path, fallback_rel in LOCAL_FALLBACK_ASSETS.items():
+        prim = stage.GetPrimAtPath(prim_path)
+        if prim is None or not prim.IsValid():
+            continue
+        unresolved = _unresolved_asset_paths_under(stage, prim_path)
+        if not unresolved:
+            continue
+        logger(
+            f"[ASSET] Replacing {prim_path} with local fallback because {len(unresolved)} asset path(s) under that prim did not resolve."
+        )
+        if _apply_reference_fallback(stage, prim_path, fallback_rel, logger):
+            changed += 1
+            unresolved_replaced += 1
+
     if room_shell_needed and enable_room_shell:
         room_path = "/Root/LocalRoomShell"
         room_prim = stage.GetPrimAtPath(room_path)
@@ -247,4 +366,13 @@ def apply_local_scene_fallbacks(stage, *, logger: Callable[[str], None] = print)
             changed += 1
             logger("[ASSET] Enabled simple room shell fallback because some room assets could not be localized.")
 
-    return {"changed": changed, "skipped": skipped, "mirrored": mirrored}
+    nested_rigid_bodies_disabled = _disable_nested_rigid_bodies(stage, logger)
+    changed += nested_rigid_bodies_disabled
+
+    return {
+        "changed": changed,
+        "skipped": skipped,
+        "mirrored": mirrored,
+        "unresolved_replaced": unresolved_replaced,
+        "nested_rigid_bodies_disabled": nested_rigid_bodies_disabled,
+    }

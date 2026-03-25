@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        BASE_IMAGE: ${ISAACLAB_BASE_IMAGE:-nvcr.io/nvidia/isaac-lab:latest}
+        BASE_IMAGE: ${ISAACLAB_BASE_IMAGE:-nvcr.io/nvidia/isaac-lab:2.3.0}
     image: ${HAC_IMAGE_NAME:-human-ai-collab:latest}
     working_dir: /workspace/Human-AI-Collab
     stdin_open: true
@@ -39,7 +39,7 @@ services:
       PRIVACY_CONSENT: ${PRIVACY_CONSENT:-Y}
       OMNI_KIT_ACCEPT_EULA: ${OMNI_KIT_ACCEPT_EULA:-Y}
       ISAACLAB_ROOT: ${ISAACLAB_ROOT:-/isaac-sim}
-      ISAACLAB_LAUNCHER: ${ISAACLAB_LAUNCHER:-/isaac-sim/isaaclab.sh}
+      ISAACLAB_LAUNCHER: ${ISAACLAB_LAUNCHER:-}
     volumes:
       - .:/workspace/Human-AI-Collab
       - /tmp/.X11-unix:/tmp/.X11-unix:rw

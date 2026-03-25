@@ -1,7 +1,9 @@
+# Copy to config/runtime_env.local.env for host-side overrides if needed.
+# COMMANDER_API_KEY is required. Cosmos settings are optional.
 COMMANDER_LLM_MODEL=gemini-2.5-flash
-COMMANDER_API_KEY=your-key-here
+COMMANDER_API_KEY=
 CUDA_VISIBLE_DEVICES=0
-COSMOS_BASE_URL=http://your-cosmos-host:8000
+COSMOS_BASE_URL=
 COSMOS_CHAT_COMPLETIONS_URL=
 COSMOS_MODEL=/models/Cosmos-Reason2-8B
 COSMOS_API_KEY=
