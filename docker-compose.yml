@@ -34,6 +34,7 @@ services:
       NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
       NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-all}
       DISPLAY: ${DISPLAY:-}
+      XAUTHORITY: /root/.Xauthority
       QT_X11_NO_MITSHM: "1"
       ACCEPT_EULA: ${ACCEPT_EULA:-Y}
       PRIVACY_CONSENT: ${PRIVACY_CONSENT:-Y}
@@ -43,6 +44,7 @@ services:
     volumes:
       - .:/workspace/Human-AI-Collab
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${XAUTHORITY_HOST_PATH:?Set XAUTHORITY_HOST_PATH in .env to the absolute path of your host Xauthority file}:/root/.Xauthority:ro
       - isaac-kit-cache:/isaac-sim/kit/cache
       - isaac-kit-logs:/root/.nvidia-omniverse/logs
       - isaac-ov-cache:/root/.cache/ov

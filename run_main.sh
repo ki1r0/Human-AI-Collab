@@ -38,6 +38,24 @@ do
   fi
 done
 
+prepend_pythonpath_if_dir() {
+  local dir="${1:-}"
+  [[ -n "${dir}" && -d "${dir}" ]] || return 0
+  case ":${PYTHONPATH:-}:" in
+    *":${dir}:"*) ;;
+    *)
+      if [[ -n "${PYTHONPATH:-}" ]]; then
+        export PYTHONPATH="${dir}:${PYTHONPATH}"
+      else
+        export PYTHONPATH="${dir}"
+      fi
+      ;;
+  esac
+}
+
+prepend_pythonpath_if_dir "/opt/hac-python"
+prepend_pythonpath_if_dir "/isaac-sim/python_packages"
+
 find_launcher() {
   local candidate=""
   for candidate in \

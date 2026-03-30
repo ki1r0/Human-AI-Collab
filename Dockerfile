@@ -5,6 +5,7 @@ SHELL ["/bin/bash", "-lc"]
 
 ENV HAC_REPO_ROOT=/workspace/Human-AI-Collab \
     ISAACLAB_ROOT=/isaac-sim \
+    PYTHONPATH=/isaac-sim/python_packages:/opt/hac-python \
     PYTHONUNBUFFERED=1
 
 WORKDIR ${HAC_REPO_ROOT}
