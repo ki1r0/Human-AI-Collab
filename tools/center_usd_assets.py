@@ -55,7 +55,7 @@ import os
 import sys
 
 # ---------------------------------------------------------------------------
-# Path bootstrap — make rc_asset_utils importable from repo root
+# Path bootstrap — make runtime.asset_utils importable from repo root
 # ---------------------------------------------------------------------------
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _REPO_ROOT not in sys.path:
@@ -66,7 +66,7 @@ from tools._bootstrap import ensure_pxr_paths
 ensure_pxr_paths()
 
 # Also look for pxr in common Isaac Sim packman cache locations.
-from rc_asset_utils import center_stage_file, CenterResult  # noqa: E402
+from runtime.asset_utils import center_stage_file, CenterResult  # noqa: E402
 
 
 # ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 import os
 from urllib.parse import urlparse
 
-from rc_paths import PROJECT_ROOT, TMP_DIR, load_runtime_env_defaults
+from .paths import PROJECT_ROOT, TMP_DIR, load_runtime_env_defaults
 
 
 load_runtime_env_defaults()

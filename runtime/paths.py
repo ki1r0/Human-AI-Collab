@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from typing import Dict, Iterable, Iterator
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_DIR = PROJECT_ROOT / "config"
 ASSETS_DIR = PROJECT_ROOT / "assets"
 TMP_DIR = PROJECT_ROOT / "tmp"

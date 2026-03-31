@@ -1,4 +1,4 @@
-"""rc_magic_assembly.py — Magic (kinematic/teleportation) assembly for tabletop parts.
+"""Magic (kinematic/teleportation) assembly for tabletop parts.
 
 Architecture
 ============
@@ -67,7 +67,7 @@ class AssemblyRecord:
 class AssemblyCommand:
     """A thread-safe command from the VLM worker → main thread assembly queue."""
 
-    action: str                                        # "combine" | "separate"
+    action: str                                        # "combine" | "separate" | "focus"
     # --- combine fields ---
     child_name: str = ""
     parent_name: str = ""
@@ -318,22 +318,24 @@ HARDCODED_FIT_OFFSETS: Dict[Tuple[str, str, str, str], Dict[str, Tuple[float, fl
     # Z-translate = ±half_thickness pushes the hub cover outward so its
     # body sits ON the surface and doesn't clip through the casing mesh.
     #
-    # Hub_Cover_Output: thin_axis=Y, half_thickness=7.03mm, rotation Rx(-90°)
+    # Hub_Cover_Output: keep the current seat depth, but flip 180deg about
+    # local Y so the cover lands with the requested facing on both top/base.
     ("Hub_Cover_Output", "Casing_Top", "plug_main", "socket_hub_output"): {
         "translate": (0.0, 0.0, 7.03),
-        "rotate_xyz": (-90.0, 0.0, 0.0),
+        "rotate_xyz": (-90.0, 180.0, 0.0),
     },
     ("Hub_Cover_Output", "Casing_Base", "plug_main", "socket_hub_output"): {
         # Seat the output cover so its flange just contacts the casing-base
         # surface. With the current authored socket this lands the child at
         # local Z ~= 35.3, which matches the manually fitted seat.
         "translate": (0.0, 0.0, 7.4),
-        "rotate_xyz": (-90.0, 0.0, 0.0),
+        "rotate_xyz": (-90.0, 180.0, 0.0),
     },
-    # Hub_Cover_Input: thin_axis=X, flange face at X≈-6.3, rotation Ry(-90°)
+    # Hub_Cover_Input: keep the current seat depth, but add the requested
+    # 90deg Z-phase after the Y rotation.
     ("Hub_Cover_Input", "Casing_Top", "plug_main", "socket_hub_input"): {
         "translate": (0.0, 0.0, 6.3),
-        "rotate_xyz": (0.0, -90.0, 0.0),
+        "rotate_xyz": (0.0, 90.0, 90.0),
     },
     # Hub_Cover_Small: thin_axis=X, flipped so flange faces outward, Ry(+90°)
     ("Hub_Cover_Small", "Casing_Top", "plug_main", "socket_hub_small"): {
@@ -417,6 +419,21 @@ HARDCODED_CHILD_LOCAL_TRANSLATE: Dict[
 ] = {
     # User-tuned hub-cover seat positions. These are final child-local
     # translations after combine, not fit-offset deltas.
+    ("Hub_Cover_Output", "Casing_Top", "plug_main", "socket_hub_output"): (
+        9.304742279029631e-17,
+        43.418589999999995,
+        31.0,
+    ),
+    ("Hub_Cover_Output", "Casing_Base", "plug_main", "socket_hub_output"): (
+        9.304742279029631e-17,
+        43.418589999999995,
+        31.0,
+    ),
+    ("Hub_Cover_Input", "Casing_Top", "plug_main", "socket_hub_input"): (
+        35.90541548031911,
+        -54.99766545623561,
+        31.8,
+    ),
     ("Hub_Cover_Small", "Casing_Base", "plug_main", "socket_hub_small_1"): (35.9, -55.0, 30.6),
     ("Hub_Cover_Small", "Casing_Base", "plug_main", "socket_hub_small_2"): (-36.3, -54.6, 30.6),
     ("Hub_Cover_Small", "Casing_Top", "plug_main", "socket_hub_small"): (-36.3, -54.6, 30.7),
@@ -425,6 +442,17 @@ HARDCODED_CHILD_LOCAL_TRANSLATE: Dict[
     # thickness of 6.300000190734865, the flush center location is:
     #   -44.44816131591773 - 3.1500000953674325 = -47.59816141128516
     ("M10_Casing_Nut", "M10_Casing_Bolt", "plug_main", ""): (0.0, -47.59816141128516, 0.0),
+}
+
+# Exact authored XYZ rotations for cases where multiple Euler decompositions are
+# equivalent mathematically, but the user wants a specific editable rotation
+# triplet to appear in Isaac Sim's property panel after combine.
+HARDCODED_CHILD_LOCAL_ROTATE_XYZ: Dict[
+    Tuple[str, str, str, str], Tuple[float, float, float]
+] = {
+    ("Hub_Cover_Input", "Casing_Top", "plug_main", "socket_hub_input"): (0.0, 90.0, 90.0),
+    ("Hub_Cover_Output", "Casing_Top", "plug_main", "socket_hub_output"): (-90.0, 180.0, 0.0),
+    ("Hub_Cover_Output", "Casing_Base", "plug_main", "socket_hub_output"): (-90.0, 180.0, 0.0),
 }
 
 # Hard local phase override (degrees) around CHILD LOCAL Y axis.
@@ -513,6 +541,9 @@ class MagicAssemblyManager:
                     msg = "ok" if ok else "failed"
                 elif cmd.action == "separate":
                     ok = self.separate(cmd.part_name)
+                    msg = "ok" if ok else "failed"
+                elif cmd.action == "focus":
+                    ok = self.focus(cmd.part_name)
                     msg = "ok" if ok else "failed"
                 else:
                     msg = f"unknown action: {cmd.action!r}"
@@ -769,6 +800,13 @@ class MagicAssemblyManager:
             self._log(f"[MAGIC] combine FAIL: prim gone after reparent at {new_child_path}")
             return False
         self._set_xform_matrix(new_child_prim, child_local_new)
+        self._apply_exact_authored_rotation_if_needed(
+            new_child_prim,
+            child_name=child_name,
+            parent_name=parent_name,
+            plug_name=str(plug_name or ""),
+            socket_name=str(socket_name or ""),
+        )
 
         # ---- Disable child subtree RigidBodyAPI to avoid nested rigid body conflict ----
         self._disable_rigid_body_recursive(new_child_prim)
@@ -815,22 +853,10 @@ class MagicAssemblyManager:
         tc = self._time_code(stage)
         current_world = self._world_xform(part_prim, tc)
 
-        # Determine target parent path
-        if record is not None:
-            target_parent_str = record.pre_combine_parent
-        else:
-            # No record — move up one level (un-nest one layer)
-            parent_prim = part_prim.GetParent()
-            if parent_prim is None or parent_prim.IsPseudoRoot():
-                self._log(f"[MAGIC] separate: '{part_path}' has no assembly parent")
-                return False
-            grandparent = parent_prim.GetParent()
-            if grandparent is None or grandparent.IsPseudoRoot():
-                target_parent_str = str(Sdf.Path.absoluteRootPath)
-            else:
-                target_parent_str = str(grandparent.GetPath())
-
-        target_parent_path = Sdf.Path(target_parent_str)
+        target_parent_path = self._resolve_detach_target_parent_path(stage, part_prim, record)
+        if target_parent_path is None:
+            self._log(f"[MAGIC] separate: '{part_path}' has no assembly parent")
+            return False
 
         # Do not restore pre-combine world poses. Disseminated parts should come
         # back as loose parts near the root origin, not jump to their old scene
@@ -857,11 +883,15 @@ class MagicAssemblyManager:
             )
         new_local = target_parent_world.GetInverse() * target_world
 
-        # Reparent
-        new_path = self._reparent(stage, part_path, target_parent_path)
-        if new_path is None:
-            self._log(f"[MAGIC] separate: reparent failed for {part_path}")
-            return False
+        # Reparent unless the part is already under the target parent.
+        current_parent_path = part_prim.GetParent().GetPath()
+        if current_parent_path == target_parent_path:
+            new_path = part_path
+        else:
+            new_path = self._reparent(stage, part_path, target_parent_path)
+            if new_path is None:
+                self._log(f"[MAGIC] separate: reparent failed for {part_path}")
+                return False
 
         new_prim = stage.GetPrimAtPath(new_path)
         if new_prim and new_prim.IsValid():
@@ -874,6 +904,30 @@ class MagicAssemblyManager:
         self._records.pop(str(new_path), None)
         self._log(f"[MAGIC] separate OK: '{part_path}' restored to '{target_parent_path}'")
         return True
+
+    def _resolve_detach_target_parent_path(self, stage, part_prim, record):
+        """Return the parent path a detached part should live under."""
+        from pxr import Sdf  # type: ignore
+
+        if record is not None:
+            return Sdf.Path(record.pre_combine_parent)
+
+        parent_prim = part_prim.GetParent()
+        if parent_prim is None or parent_prim.IsPseudoRoot():
+            return None
+
+        default_prim = stage.GetDefaultPrim()
+        if (
+            default_prim
+            and default_prim.IsValid()
+            and parent_prim.GetPath() == default_prim.GetPath()
+        ):
+            return parent_prim.GetPath()
+
+        grandparent = parent_prim.GetParent()
+        if grandparent is None or grandparent.IsPseudoRoot():
+            return Sdf.Path.absoluteRootPath
+        return grandparent.GetPath()
 
     def separate(self, part_name: str) -> bool:
         """Disseminate an assembled prim by detaching its tracked descendants first."""
@@ -944,6 +998,82 @@ class MagicAssemblyManager:
 
         ok = self._separate_resolved_path(stage, part_path)
         return ok or separated_any
+
+    def focus(self, part_name: str) -> bool:
+        """Move a part, or its containing assembly, so the part lands at world (0, -0.85, current_z)."""
+        from pxr import Gf  # type: ignore
+
+        self._log(f"[MAGIC] focus START: part={part_name!r}")
+
+        stage = self._stage_fn()
+        if stage is None:
+            self._log("[MAGIC] focus FAIL: stage not available")
+            return False
+
+        part_path = self._find_prim_path(stage, part_name)
+        if part_path is None:
+            self._log(f"[MAGIC] focus FAIL: part '{part_name}' not found")
+            return False
+
+        self._log(f"[MAGIC] focus: resolved path={part_path}")
+
+        part_prim = stage.GetPrimAtPath(part_path)
+        if part_prim is None or not part_prim.IsValid():
+            self._log(f"[MAGIC] focus FAIL: invalid prim at {part_path}")
+            return False
+
+        focus_path = self._resolve_focus_target_path(stage, part_path)
+        focus_prim = stage.GetPrimAtPath(focus_path)
+        if focus_prim is None or not focus_prim.IsValid():
+            self._log(f"[MAGIC] focus FAIL: focus target invalid at {focus_path}")
+            return False
+
+        tc = self._time_code(stage)
+        part_world = self._world_xform(part_prim, tc)
+        focus_world = self._world_xform(focus_prim, tc)
+        part_world_row = part_world.GetRow3(3)
+        focus_world_row = focus_world.GetRow3(3)
+
+        delta_x = float(-float(part_world_row[0]))
+        delta_y = float(-0.85 - float(part_world_row[1]))
+        target_world = Gf.Matrix4d(focus_world)
+        target_world.SetRow3(
+            3,
+            Gf.Vec3d(
+                float(focus_world_row[0]) + delta_x,
+                float(focus_world_row[1]) + delta_y,
+                float(focus_world_row[2]),
+            ),
+        )
+
+        focus_parent = focus_prim.GetParent()
+        if focus_parent is None or focus_parent.IsPseudoRoot():
+            target_parent_world = Gf.Matrix4d(1.0)
+        else:
+            target_parent_world = self._world_xform(focus_parent, tc)
+        new_local = target_parent_world.GetInverse() * target_world
+        self._set_xform_matrix(focus_prim, new_local)
+
+        self._log(
+            f"[MAGIC] focus OK: part='{part_name}' target='{focus_path}' "
+            f"-> part_world (0.0, -0.85, {float(part_world_row[2]):.3f})"
+        )
+        return True
+
+    def _resolve_focus_target_path(self, stage, part_path):
+        """Return the top-level assembly node that should move when focusing a part."""
+        focus_prim = stage.GetPrimAtPath(part_path)
+        if focus_prim is None or not focus_prim.IsValid():
+            return part_path
+
+        default_prim = stage.GetDefaultPrim()
+        while True:
+            parent_prim = focus_prim.GetParent()
+            if parent_prim is None or parent_prim.IsPseudoRoot():
+                return focus_prim.GetPath()
+            if default_prim and default_prim.IsValid() and parent_prim.GetPath() == default_prim.GetPath():
+                return focus_prim.GetPath()
+            focus_prim = parent_prim
 
     # ------------------------------------------------------------------
     # Casing orientation helper
@@ -1665,11 +1795,124 @@ class MagicAssemblyManager:
         )
         return True
 
+    def _decompose_matrix_to_trs(self, matrix):
+        """Decompose a local matrix into TRS values using USD's own accumulation logic."""
+        from pxr import Gf, Usd, UsdGeom  # type: ignore
+
+        tmp_stage = Usd.Stage.CreateInMemory()
+        tmp_prim = UsdGeom.Xform.Define(tmp_stage, "/_decompose").GetPrim()
+        tmp_xf = UsdGeom.Xformable(tmp_prim)
+        tmp_xf.ClearXformOpOrder()
+        tmp_xf.AddTransformOp(UsdGeom.XformOp.PrecisionDouble).Set(Gf.Matrix4d(matrix))
+        api = UsdGeom.XformCommonAPI(tmp_prim)
+        translate, rotate_xyz, scale, _pivot, _order = api.GetXformVectorsByAccumulation(
+            Usd.TimeCode.Default()
+        )
+        return (
+            (float(translate[0]), float(translate[1]), float(translate[2])),
+            (float(rotate_xyz[0]), float(rotate_xyz[1]), float(rotate_xyz[2])),
+            (float(scale[0]), float(scale[1]), float(scale[2])),
+        )
+
+    def _matrix_matches_trs(
+        self,
+        matrix,
+        *,
+        translate: Tuple[float, float, float],
+        rotate_xyz: Tuple[float, float, float],
+        scale: Tuple[float, float, float],
+        tol: float = 1e-4,
+    ) -> bool:
+        """Return True when clean TRS re-composes back to the original matrix."""
+        from pxr import Gf, Usd, UsdGeom  # type: ignore
+
+        tmp_stage = Usd.Stage.CreateInMemory()
+        tmp_prim = UsdGeom.Xform.Define(tmp_stage, "/_recompose").GetPrim()
+        tmp_xf = UsdGeom.Xformable(tmp_prim)
+        tmp_xf.ClearXformOpOrder()
+        api = UsdGeom.XformCommonAPI(tmp_prim)
+        api.SetTranslate(Gf.Vec3d(*translate))
+        api.SetRotate(
+            Gf.Vec3f(*rotate_xyz),
+            UsdGeom.XformCommonAPI.RotationOrderXYZ,
+        )
+        api.SetScale(Gf.Vec3f(*scale))
+        recomposed = tmp_xf.GetLocalTransformation(Usd.TimeCode.Default())
+        if isinstance(recomposed, tuple):
+            recomposed = recomposed[0]
+
+        lhs = Gf.Matrix4d(matrix)
+        rhs = Gf.Matrix4d(recomposed)
+        for row in range(4):
+            for col in range(4):
+                if abs(float(lhs[row][col]) - float(rhs[row][col])) > tol:
+                    return False
+        return True
+
+    def _apply_exact_authored_rotation_if_needed(
+        self,
+        prim,
+        *,
+        child_name: str,
+        parent_name: str,
+        plug_name: str,
+        socket_name: str,
+    ) -> None:
+        """Force a specific editable rotateXYZ triplet for selected combine results."""
+        from pxr import Usd, UsdGeom  # type: ignore
+
+        if prim is None or not prim.IsValid():
+            return
+        key = (
+            _canonical_child_name(child_name),
+            re.sub(r"_\d+$", "", str(parent_name or "")),
+            str(plug_name or "").strip(),
+            str(socket_name or "").strip(),
+        )
+        rotate_xyz = HARDCODED_CHILD_LOCAL_ROTATE_XYZ.get(key)
+        if rotate_xyz is None:
+            return
+
+        xf = UsdGeom.Xformable(prim)
+        local_mat = xf.GetLocalTransformation(Usd.TimeCode.Default())
+        translate, _ignored_rotate, scale = self._decompose_matrix_to_trs(local_mat)
+        self._set_xform_trs(
+            prim,
+            translate=translate,
+            rotate_xyz=rotate_xyz,
+            scale=scale,
+        )
+        self._log(
+            f"[MAGIC] exact authored rotate override: key={key} -> "
+            f"Rxyz=({rotate_xyz[0]:.3f}, {rotate_xyz[1]:.3f}, {rotate_xyz[2]:.3f})"
+        )
+
     def _set_xform_matrix(self, prim, matrix) -> None:
-        """Replace prim's entire xform op stack with a single TypeTransform op."""
+        """Author the solved local pose, preferring clean TRS over a raw matrix op."""
         from pxr import UsdGeom, Gf  # type: ignore
         if prim is None or not prim.IsValid():
             return
+        try:
+            translate, rotate_xyz, scale = self._decompose_matrix_to_trs(matrix)
+            if self._matrix_matches_trs(
+                matrix,
+                translate=translate,
+                rotate_xyz=rotate_xyz,
+                scale=scale,
+            ):
+                self._set_xform_trs(
+                    prim,
+                    translate=translate,
+                    rotate_xyz=rotate_xyz,
+                    scale=scale,
+                )
+                return
+        except Exception as exc:
+            self._log(
+                f"[MAGIC] xform decompose warning for {prim.GetPath()}: {exc}; "
+                "falling back to raw matrix op"
+            )
+
         xf = UsdGeom.Xformable(prim)
         xf.ClearXformOpOrder()
         op = xf.AddXformOp(

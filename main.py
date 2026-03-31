@@ -14,7 +14,7 @@ import os
 import sys
 from pathlib import Path
 
-from rc_paths import ASSETS_DIR, PROJECT_ROOT, load_runtime_env_defaults
+from runtime.paths import ASSETS_DIR, PROJECT_ROOT, load_runtime_env_defaults
 
 
 load_runtime_env_defaults()
@@ -23,14 +23,15 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 simulation_app = None
-_REQUIRED_STARTUP_PRIMS = ("/Franka", "/Franka/head_camera")
+_REQUIRED_STARTUP_PRIMS = ()
+_OPTIONAL_STARTUP_PRIMS = ("/Franka", "/Franka/head_camera")
 
 
 def _apply_scene_fallbacks() -> None:
     try:
         import omni.usd
 
-        from rc_scene_setup import apply_local_scene_fallbacks
+        from runtime.scene_setup import apply_local_scene_fallbacks
 
         stage = omni.usd.get_context().get_stage()
         if stage is None:
@@ -66,6 +67,21 @@ def _validate_startup_stage(stage, scene_path: str) -> None:
         raise RuntimeError(f"scene {scene_path} is missing required prim(s): {joined}")
 
 
+def _warn_missing_optional_startup_prims(stage) -> None:
+    missing_prims = []
+    for prim_path in _OPTIONAL_STARTUP_PRIMS:
+        prim = stage.GetPrimAtPath(prim_path)
+        if prim is None or not prim.IsValid():
+            missing_prims.append(prim_path)
+    if missing_prims:
+        joined = ", ".join(missing_prims)
+        print(
+            f"[WARN] Optional startup prim(s) missing: {joined}. "
+            "Runtime will continue; robot control may self-disable and camera initialization will fall back to any available camera.",
+            flush=True,
+        )
+
+
 def _open_startup_stage(scene_path: str) -> None:
     if simulation_app is None:
         raise RuntimeError("simulation_app is not initialized")
@@ -85,8 +101,9 @@ def _open_startup_stage(scene_path: str) -> None:
             continue
         _apply_scene_fallbacks()
         _validate_startup_stage(stage, stage_path)
+        _warn_missing_optional_startup_prims(stage)
         print(f"[STARTUP] Opened USD stage: {stage_path}", flush=True)
-        print("[STARTUP] Validated required prims: /Franka, /Franka/head_camera", flush=True)
+        print("[STARTUP] Validated startup stage integrity.", flush=True)
         try:
             omni.timeline.get_timeline_interface().stop()
         except Exception:
@@ -153,15 +170,15 @@ except ModuleNotFoundError:
             simulation_app.close()
         raise SystemExit(1) from exc
 
-_PROJECT_PACKAGES = ("rc_ui", "rc_config", "rc_state", "rc_log", "agent", "sensor", "belief", "memory", "control")
+_PROJECT_PACKAGES = ("runtime", "agent", "sensor", "belief", "memory", "control")
 for _name in list(sys.modules.keys()):
     if any(_name == pkg or _name.startswith(pkg + ".") for pkg in _PROJECT_PACKAGES):
         sys.modules.pop(_name, None)
 
-import rc_ui
+from runtime import ui
 
 _apply_scene_fallbacks()
-rc_ui.run()
+ui.run()
 
 if simulation_app is not None:
     try:

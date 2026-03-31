@@ -56,7 +56,7 @@ def _get_existing_scale(prim) -> Gf.Vec3f:
         if op.GetOpType() == UsdGeom.XformOp.TypeScale:
             value = op.Get()
             return Gf.Vec3f(float(value[0]), float(value[1]), float(value[2]))
-    return Gf.Vec3f(0.005, 0.005, 0.005)
+    return Gf.Vec3f(0.002, 0.002, 0.002)
 
 
 def main() -> int:

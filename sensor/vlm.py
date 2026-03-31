@@ -3,7 +3,7 @@ import json
 import urllib.error
 import urllib.request
 
-from rc_config import (
+from runtime.config import (
     COSMOS_API_KEY,
     COSMOS_MODEL,
     SYSTEM_MSG,
@@ -11,8 +11,8 @@ from rc_config import (
     cosmos_chat_completions_url,
     cosmos_is_configured,
 )
-from rc_state import STATE
-from rc_log import log_info, log_line
+from runtime.state import STATE
+from runtime.log import log_info, log_line
 
 
 class VlmHttpError(RuntimeError):

@@ -15,7 +15,7 @@ Workflow
      already used for the existing 4 parts:
        xformOp:translate  (position on table)
        xformOp:orient     quaternion
-       xformOp:scale      (0.5, 0.5, 0.5)   ← user-requested half-scale
+       xformOp:scale      (0.2, 0.2, 0.2)   ← user-requested part scale
        xformOp:rotateX    90                  ← Y-up → Z-up
        xformOp:scale      (0.01, 0.01, 0.01) ← mm → m unit conversion
 
@@ -43,7 +43,7 @@ from tools._bootstrap import ensure_pxr_paths
 ensure_pxr_paths()
 
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade, Vt  # type: ignore
-from rc_asset_utils import rigorously_center_prim  # noqa: E402
+from runtime.asset_utils import rigorously_center_prim  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +226,7 @@ def _make_part_usd(
 # Transform used in simple_room_scene.usd for all gearbox parts:
 #   scale=(0.01,0.01,0.01)  mm→m unit conversion
 #   rotateX=90              Y-up (part) → Z-up (scene)
-#   scale=(0.5,0.5,0.5)     half-scale per user spec
+#   scale=(0.2,0.2,0.2)     user-requested part scale
 #   orient=quaternion        part orientation
 #   translate=(x,y,z)        world position in metres
 
@@ -299,7 +299,7 @@ def _build_demo_scene(
         # Set transform ops BEFORE adding the reference, so AddXformOp does
         # not see the referenced file's defaultPrim ops in the composed stage.
         # Transform stack (matches existing 4 parts in simple_room_scene.usd):
-        #   translate → orient → scale(0.5) → rotateX(90) → scale(0.01)
+        #   translate → orient → scale(0.2) → rotateX(90) → scale(0.01)
         xform.AddTranslateOp(UsdGeom.XformOp.PrecisionDouble).Set(
             Gf.Vec3d(pos[0], pos[1], pos[2])
         )
@@ -308,7 +308,7 @@ def _build_demo_scene(
         )
         xform.AddScaleOp(
             UsdGeom.XformOp.PrecisionFloat, "halfScale"
-        ).Set(Gf.Vec3f(0.5, 0.5, 0.5))
+        ).Set(Gf.Vec3f(0.2, 0.2, 0.2))
         xform.AddRotateXOp(UsdGeom.XformOp.PrecisionFloat).Set(90.0)
         xform.AddScaleOp(
             UsdGeom.XformOp.PrecisionFloat, "unitScale"

@@ -5,7 +5,7 @@ try:
 except ImportError:  # pragma: no cover - Isaac Sim runtime optional for pure-Python checks
     carb = None
 
-from rc_state import STATE
+from .state import STATE
 
 
 def render_log():

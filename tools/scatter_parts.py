@@ -37,7 +37,7 @@ FLOOR_Z = 0.02   # just above the floor
 
 # Room extents (approx): X: [-2.5, 2.5],  Y: [-2.5, 2.5]
 # Table center ≈ (0, 0), table extent ≈ X: [-0.50, 0.50], Y: [-0.70, 0.70]
-# Parts at scale 0.005 are ~0.5-1.5m in scene, so need ≥1.2m spacing.
+# Parts at scale 0.002 are smaller in scene, but we keep generous spacing.
 
 PART_POSITIONS = {
     # --- Large casings: far apart on floor ---

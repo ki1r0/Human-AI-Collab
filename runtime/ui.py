@@ -19,7 +19,7 @@ from sensor import cosmos_endpoint, test_cosmos_connection, StateMonitor
 from agent import cognitive_worker
 from control import FrankaControlPolicy
 from memory import LongTermMemory, ShortTermMemory
-from rc_config import (
+from .config import (
     CAPTURE_FPS,
     COSMOS_MODEL,
     INQUIRY_FRAME_COUNT,
@@ -29,9 +29,9 @@ from rc_config import (
     STREAM_DEFAULT_PROMPT,
     TIMEOUT_SEC,
 )
-from rc_log import log_error, log_info, log_line, log_warn, render_log
-from rc_paths import asset_browser_cache_dir
-from rc_state import STATE
+from .log import log_error, log_info, log_line, log_warn, render_log
+from .paths import asset_browser_cache_dir
+from .state import STATE
 
 
 def _get_task_loop() -> asyncio.AbstractEventLoop:
@@ -407,7 +407,7 @@ def _init_pipeline_once() -> None:
         STATE.robot_controller = FrankaControlPolicy(logger=lambda m: log_line("INFO ", m))
 
     if STATE.magic_assembly is None:
-        from rc_magic_assembly import MagicAssemblyManager
+        from .magic_assembly import MagicAssemblyManager
         STATE.magic_assembly = MagicAssemblyManager(logger=lambda m: log_line("INFO ", m))
         try:
             created = STATE.magic_assembly.ensure_extra_hub_bolt_assets()
@@ -433,7 +433,7 @@ def _init_pipeline_once() -> None:
             log_line("WARN ", f"Failed to ensure case attachment assets: {exc}")
 
     if STATE.state_monitor is None:
-        from rc_config import GT_TRACKED_PRIMS, GT_POSITION_THRESHOLD, GT_ORIENTATION_THRESHOLD, GT_COOLDOWN_SEC
+        from .config import GT_TRACKED_PRIMS, GT_POSITION_THRESHOLD, GT_ORIENTATION_THRESHOLD, GT_COOLDOWN_SEC
         STATE.state_monitor = StateMonitor(
             tracked_prim_paths=GT_TRACKED_PRIMS if GT_TRACKED_PRIMS else None,
             position_threshold=GT_POSITION_THRESHOLD,
@@ -1310,7 +1310,7 @@ def _queue_combine_batch(
         log_line("WARN ", f"/{command_name}: magic_assembly not initialised")
         return True
 
-    from rc_magic_assembly import AssemblyCommand
+    from .magic_assembly import AssemblyCommand
 
     total = len(combines)
     for index, (child, parent, plug, socket) in enumerate(combines, start=1):
@@ -1527,7 +1527,7 @@ def combine_accessories() -> bool:
 
 def _combine_bearing_subassembly(command_name: str) -> bool:
     """Queue a hardcoded bearing subassembly batch when explicitly enabled."""
-    from rc_magic_assembly import BEARING_SUBASSEMBLY_BATCHES
+    from .magic_assembly import BEARING_SUBASSEMBLY_BATCHES
 
     combines = BEARING_SUBASSEMBLY_BATCHES.get(command_name, [])
     if not combines:
@@ -1558,6 +1558,7 @@ def _try_slash_command(text: str) -> bool:
     ------------------
     /combine("partA", "partB", "plug_name", "socket_name")
     /separate("part_name")
+    /focus("part_name")
     /assemblies          — list all active part attachments
     /flip_casing_base    — rotate Casing_Base 180° so inside faces upward
     /combine_casing_top  — combine the top-side hub covers and M6 hub bolts onto Casing_Top
@@ -1636,7 +1637,7 @@ def _try_slash_command(text: str) -> bool:
         log_line(
             "WARN ",
             f"Unknown /command: {text!r}  "
-            f"(use /combine, /separate, /assemblies, /combine_casing_top, "
+            f"(use /combine, /separate, /focus, /assemblies, /combine_casing_top, "
             f"/combine_casing_base, /combine_base_shafts, /combine_bolt_hub, "
             f"/combine_casing_bolt, /combine_accessories, /combine_output_shaft)",
         )
@@ -1678,7 +1679,7 @@ def _try_slash_command(text: str) -> bool:
                     )
             except Exception as exc:
                 log_line("WARN ", f"/combine prep failed: {exc}")
-        from rc_magic_assembly import AssemblyCommand
+        from .magic_assembly import AssemblyCommand
         ma.enqueue(AssemblyCommand(
             action="combine",
             child_name=child,
@@ -1701,7 +1702,7 @@ def _try_slash_command(text: str) -> bool:
             log_line("WARN ", "/separate requires 1 argument: part_name")
             return True
         part = str(args[0])
-        from rc_magic_assembly import AssemblyCommand
+        from .magic_assembly import AssemblyCommand
         ma.enqueue(AssemblyCommand(
             action="separate",
             part_name=part,
@@ -1712,11 +1713,27 @@ def _try_slash_command(text: str) -> bool:
         ))
         log_line("INFO ", f"/separate queued: {part!r}")
 
+    elif cmd_name == "focus":
+        if len(args) < 1:
+            log_line("WARN ", "/focus requires 1 argument: part_name")
+            return True
+        part = str(args[0])
+        from .magic_assembly import AssemblyCommand
+        ma.enqueue(AssemblyCommand(
+            action="focus",
+            part_name=part,
+            callback=lambda ok, msg: log_line(
+                "INFO " if ok else "WARN ",
+                f"/focus({part!r}) {'OK' if ok else 'FAILED: ' + msg}",
+            ),
+        ))
+        log_line("INFO ", f"/focus queued: {part!r}")
+
     else:
         log_line(
             "WARN ",
             f"Unknown /command: /{cmd_name}  "
-            f"(use /combine, /separate, /assemblies, /combine_casing_top, "
+            f"(use /combine, /separate, /focus, /assemblies, /combine_casing_top, "
             f"/combine_casing_base, /combine_base_shafts, /combine_bolt_hub, "
             f"/combine_casing_bolt, /combine_accessories)",
         )
@@ -2132,7 +2149,7 @@ async def _worker_poll_loop() -> None:
                     if a_type in ("combine", "separate"):
                         ma = STATE.magic_assembly
                         if ma is not None:
-                            from rc_magic_assembly import AssemblyCommand
+                            from .magic_assembly import AssemblyCommand
                             args = action.get("args") or {}
                             if a_type == "combine":
                                 child = str(args.get("child") or args.get("child_name") or args.get("partA") or "").strip()

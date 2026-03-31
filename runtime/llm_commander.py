@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from rc_config import (
+from .config import (
     COMMANDER_API_KEY,
     COMMANDER_BASE_URL,
     COMMANDER_GEMINI_BASE_URL,
@@ -1235,7 +1235,7 @@ def commander_reason(
 
     if frame_list and routing is not None:
         if routing.use_cosmos and cosmos_available:
-            from rc_vlm_cosmos import observe_physics
+            from .vlm_cosmos import observe_physics
 
             t_obs = time.time()
             observer_text = observe_physics(

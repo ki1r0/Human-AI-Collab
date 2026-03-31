@@ -10,8 +10,8 @@ from _bootstrap import REPO_ROOT, ensure_pxr_paths
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from rc_paths import ASSETS_DIR  # noqa: E402
-from rc_scene_setup import apply_local_scene_fallbacks  # noqa: E402
+from runtime.paths import ASSETS_DIR  # noqa: E402
+from runtime.scene_setup import apply_local_scene_fallbacks  # noqa: E402
 
 
 def _open_stage_with_pxr(stage_path: Path):

@@ -6,7 +6,7 @@ import urllib.request
 from pathlib import Path
 from typing import Callable, Dict, Iterable, Iterator, List, Tuple
 
-from rc_paths import ASSETS_DIR
+from .paths import ASSETS_DIR
 
 REMOTE_ROOM_PREFIXES = (
     "Towel_Room01_",

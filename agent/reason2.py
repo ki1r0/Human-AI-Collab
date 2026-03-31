@@ -10,7 +10,7 @@ import urllib.request
 from io import BytesIO
 from typing import Any, Dict, List, Sequence, Tuple
 
-from rc_config import (
+from runtime.config import (
     COSMOS_API_KEY,
     FORCE_JSON_RESPONSE,
     COSMOS_MAX_MODEL_LEN,

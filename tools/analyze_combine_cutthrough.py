@@ -22,7 +22,7 @@ from tools._bootstrap import ensure_pxr_paths
 ensure_pxr_paths()
 
 from pxr import Gf, Sdf, Usd, UsdGeom
-from rc_magic_assembly import MagicAssemblyManager, HARDCODED_FIT_OFFSETS, DEFAULT_SOCKET_MAP, DEFAULT_PLUG_MAP
+from runtime.magic_assembly import MagicAssemblyManager, HARDCODED_FIT_OFFSETS, DEFAULT_SOCKET_MAP, DEFAULT_PLUG_MAP
 
 
 # All connecting pairs from the assembly manual

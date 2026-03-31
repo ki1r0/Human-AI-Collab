@@ -1,6 +1,6 @@
 from collections import deque
 
-from rc_config import (
+from .config import (
     MAX_LOG_LINES,
     MAX_TURNS_TO_KEEP,
     CAMERA_PRIM_PATH,

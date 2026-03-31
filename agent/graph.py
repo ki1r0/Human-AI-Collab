@@ -131,7 +131,7 @@ class AgentGraph:
         )
 
     def _default_physics_observer(self, **kwargs) -> str:
-        from rc_vlm_cosmos import observe_physics
+        from runtime.vlm_cosmos import observe_physics
 
         return observe_physics(
             frames=kwargs.get("frames") or [],
@@ -141,7 +141,7 @@ class AgentGraph:
         )
 
     def _default_commander(self, **kwargs) -> Dict[str, Any]:
-        from rc_llm_commander import commander_reason
+        from runtime.llm_commander import commander_reason
 
         return commander_reason(
             belief_state=kwargs.get("belief_state") if isinstance(kwargs.get("belief_state"), dict) else {},

@@ -6,7 +6,7 @@ import urllib.request
 from io import BytesIO
 from typing import Any, Dict, List, Sequence
 
-from rc_config import (
+from .config import (
     COSMOS_API_KEY,
     COSMOS_MODEL,
     IMAGE_FORMAT,

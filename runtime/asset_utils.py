@@ -1,4 +1,4 @@
-"""rc_asset_utils.py — Shared USD asset processing utilities.
+"""Shared USD asset processing utilities.
 
 Provides mathematically exact operations on USD part files, callable both
 from the command-line tool (tools/center_usd_assets.py) and at runtime inside

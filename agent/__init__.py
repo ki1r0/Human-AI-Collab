@@ -7,4 +7,4 @@ try:
     from .graph import AgentGraph
     from .reason2 import reason2_decide, call_reason2
 except ImportError:
-    pass  # requires rc_config + langgraph (available at runtime)
+    pass  # requires runtime.config + langgraph (available at runtime)

@@ -16,6 +16,6 @@ except ImportError:
 try:
     from .vlm import cosmos_endpoint, test_cosmos_connection
 except ImportError:
-    pass  # requires rc_config (available at runtime)
+    pass  # requires runtime.config (available at runtime)
 
 from .perception import StateMonitor

@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional, Sequence, Tuple
 import omni.usd
 from pxr import UsdPhysics
 
-from rc_config import (
+from runtime.config import (
     ENABLE_FRANKA_CONTROL,
     FRANKA_HOME_JOINT_POS,
     PREFER_DIFFIK,
@@ -92,7 +92,7 @@ class RobotController:
     1. RMPFlow (Lula) for smooth task-space motions.
     2. DifferentialIK (Jacobian pseudo-inverse) as fallback.
 
-    Applies tuned stiffness/damping from rc_config for jitter-free operation.
+    Applies tuned stiffness/damping from runtime.config for jitter-free operation.
     """
 
     def __init__(self, *, logger=print) -> None:

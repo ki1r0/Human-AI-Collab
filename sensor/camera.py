@@ -11,9 +11,9 @@ import omni.usd
 import omni.replicator.core as rep
 from pxr import UsdGeom
 
-from rc_config import CAMERA_PRIM_PATH, RESOLUTION, IMAGE_FORMAT, IMAGE_QUALITY, SAVE_EACH_SENT_FRAME  # noqa: E501
-from rc_state import STATE
-from rc_log import log_info, log_warn
+from runtime.config import CAMERA_PRIM_PATH, RESOLUTION, IMAGE_FORMAT, IMAGE_QUALITY, SAVE_EACH_SENT_FRAME  # noqa: E501
+from runtime.state import STATE
+from runtime.log import log_info, log_warn
 
 
 def init_camera():

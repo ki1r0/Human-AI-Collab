@@ -1,18 +1,23 @@
-/combine("Hub_Cover_Output","Casing_Top","plug_main","socket_hub_output")
-/combine("Hub_Cover_Input","Casing_Top","plug_main","socket_hub_input")
-/combine("Hub_Cover_Small","Casing_Top","plug_main","socket_hub_small")
-/combine("M6_Hub_Bolt","Casing_Top","plug_main","socket_bolt_hub_1")
+1. To combine parts: 
+    /combine("child_part","parent_part","plug_name","socket_name")
+    eg: 
+    /combine("Hub_Cover_Output","Casing_Top","plug_main","socket_hub_output")
+    /combine("Hub_Cover_Input","Casing_Top","plug_main","socket_hub_input")
+    /combine("Hub_Cover_Small","Casing_Top","plug_main","socket_hub_small")
+    /combine("M6_Hub_Bolt","Casing_Top","plug_main","socket_bolt_hub_1")
 
-/combine("Transfer_Shaft", "Casing_Base", "plug_main", "socket_gear_transfer")
-/combine("Input_Shaft", "Casing_Base", "plug_main", "socket_gear_input")
-/combine("Output_Shaft", "Casing_Base", "plug_main", "socket_gear_output")
+2. To separate combined parts: 
+    /separate("combined_part_name")
+    eg: 
+    /separate("Casing_Top")
 
-/combine_input_shaft
-/combine_transfer_shaft
-/combine_output_shaft
+3. To move parts to the working ares:
+    /focus("part_name")
+    eg:
+    /focus("Casing_Base")
 
-/combine_casing_top
-/combine_casing_base
-
-/combine("Casing_Top","Casing_Base","plug_casing_mate","socket_casing_mate")
-/combine_casing_bolt
+4. Assembly sequence using shortcut functions:
+    /combine_casing_top
+    /combine_casing_base
+    /combine("Casing_Top","Casing_Base","plug_casing_mate","socket_casing_mate")
+    /combine_casing_bolt

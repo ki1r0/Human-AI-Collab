@@ -8,7 +8,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from rc_config import LTM_SQLITE_PATH, MEM0_API_KEY, MEMORY_ROOT
+from runtime.config import LTM_SQLITE_PATH, MEM0_API_KEY, MEMORY_ROOT
 
 
 @dataclass
@@ -71,7 +71,7 @@ class LongTermMemory:
 
         Order:
         1) MEM0_API_KEY env
-        2) imported rc_config.MEM0_API_KEY fallback
+        2) imported runtime.config.MEM0_API_KEY fallback
         """
         env_key = (os.getenv("MEM0_API_KEY", "") or "").strip()
         if env_key:
@@ -218,7 +218,7 @@ class _Mem0Adapter:
         self._fallback = fallback
         self._disabled_reason = ""
         self._use_client = bool(use_client)
-        # Use the configured key from rc_config as the source of truth for this demo.
+        # Use the configured key from runtime.config as the source of truth for this demo.
         # This avoids stale shell env values from older sessions.
         mem0_key = LongTermMemory._resolve_mem0_key()
         self._mem0_key_tail = mem0_key[-6:] if mem0_key else ""
