@@ -87,7 +87,7 @@ If no Cosmos endpoint is configured, the app logs that it is bypassing Cosmos an
 - This repo expects the base Isaac runtime to provide the GUI stack.
 - Preferred: mount your host Xauthority file by setting `XAUTHORITY_HOST_PATH` in `.env`.
 - The safest source for `XAUTHORITY_HOST_PATH` is the current value of `echo $XAUTHORITY` on the host.
-- On Linux with X11 forwarding, you may still need:
+- On Linux with X11 forwarding, you may need:
   ```bash
   xhost +local:root
   ```
@@ -104,6 +104,7 @@ If no Cosmos endpoint is configured, the app logs that it is bypassing Cosmos an
 ## Additional Docs
 
 - Docker quickstart: [docs/docker_run.md](docs/docker_run.md)
+- Cloud GPU + browser streaming: [docs/cloud_deployment.md](docs/cloud_deployment.md)
 - AI-assistant setup prompt: [docs/setup_with_ai_assistant.md](docs/setup_with_ai_assistant.md)
 
 ## First Launch Checklist

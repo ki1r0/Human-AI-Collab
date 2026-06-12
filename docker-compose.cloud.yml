@@ -1,0 +1,75 @@
+services:
+  hac-cloud:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: ${ISAACLAB_BASE_IMAGE:-nvcr.io/nvidia/isaac-lab:2.3.0}
+    image: ${HAC_IMAGE_NAME:-human-ai-collab:cloud}
+    working_dir: /workspace/Human-AI-Collab
+    stdin_open: true
+    tty: true
+    ipc: host
+    shm_size: "8g"
+    network_mode: host
+    gpus: all
+    env_file:
+      - config/runtime_env.env
+    environment:
+      COMMANDER_API_KEY: ${COMMANDER_API_KEY:?Set COMMANDER_API_KEY in .env.cloud}
+      COMMANDER_LLM_MODEL: ${COMMANDER_LLM_MODEL:-gemini-2.5-flash}
+      COSMOS_BASE_URL: ${COSMOS_BASE_URL:-}
+      COSMOS_CHAT_COMPLETIONS_URL: ${COSMOS_CHAT_COMPLETIONS_URL:-}
+      COSMOS_MODEL: ${COSMOS_MODEL:-/models/Cosmos-Reason2-8B}
+      COSMOS_API_KEY: ${COSMOS_API_KEY:-}
+      COSMOS_TIMEOUT: ${COSMOS_TIMEOUT:-60}
+      MEM0_API_KEY: ${MEM0_API_KEY:-}
+      PUBLIC_IP: ${PUBLIC_IP:?Set PUBLIC_IP in .env.cloud}
+      LIVESTREAM: "1"
+      HEADLESS: "1"
+      ENABLE_CAMERAS: "1"
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
+      NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-all}
+      ACCEPT_EULA: ${ACCEPT_EULA:-Y}
+      PRIVACY_CONSENT: ${PRIVACY_CONSENT:-Y}
+      OMNI_KIT_ACCEPT_EULA: ${OMNI_KIT_ACCEPT_EULA:-Y}
+      ISAACLAB_ROOT: ${ISAACLAB_ROOT:-/isaac-sim}
+      ISAACLAB_LAUNCHER: ${ISAACLAB_LAUNCHER:-}
+      HAC_PREFER_LOCAL_SCENE_ASSETS: ${HAC_PREFER_LOCAL_SCENE_ASSETS:-1}
+      HAC_AUTO_DOWNLOAD_SCENE_ASSETS: ${HAC_AUTO_DOWNLOAD_SCENE_ASSETS:-0}
+      HAC_ENABLE_ROOM_SHELL_FALLBACK: ${HAC_ENABLE_ROOM_SHELL_FALLBACK:-0}
+    volumes:
+      - .:/workspace/Human-AI-Collab
+      - isaac-kit-cache:/isaac-sim/kit/cache
+      - isaac-kit-logs:/root/.nvidia-omniverse/logs
+      - isaac-ov-cache:/root/.cache/ov
+      - isaac-packman-cache:/root/.cache/packman
+      - isaac-pip-cache:/root/.cache/pip
+      - isaac-ov-data:/root/.local/share/ov/data
+      - isaac-glcache:/root/.cache/nvidia/GLCache
+      - isaac-compute-cache:/root/.nv/ComputeCache
+    command: ["bash", "/workspace/Human-AI-Collab/docker/run_cloud_demo.sh"]
+    restart: unless-stopped
+
+  web-viewer:
+    build:
+      context: ./docker/web-viewer
+      args:
+        ISAACSIM_HOST: ${PUBLIC_IP:?Set PUBLIC_IP in .env.cloud}
+        ISAACSIM_SIGNAL_PORT: "49100"
+        ISAACSIM_STREAM_PORT: "47998"
+    network_mode: host
+    command: ["npx", "vite", "preview", "--host", "--port", "8210"]
+    depends_on:
+      - hac-cloud
+    restart: unless-stopped
+
+volumes:
+  isaac-kit-cache:
+  isaac-kit-logs:
+  isaac-ov-cache:
+  isaac-packman-cache:
+  isaac-pip-cache:
+  isaac-ov-data:
+  isaac-glcache:
+  isaac-compute-cache:

@@ -25,7 +25,8 @@ COPY . ${HAC_REPO_ROOT}
 
 RUN chmod +x ${HAC_REPO_ROOT}/run_main.sh \
     ${HAC_REPO_ROOT}/docker/entrypoint.sh \
-    ${HAC_REPO_ROOT}/docker/run_demo.sh
+    ${HAC_REPO_ROOT}/docker/run_demo.sh \
+    ${HAC_REPO_ROOT}/docker/run_cloud_demo.sh
 
 ENTRYPOINT ["/workspace/Human-AI-Collab/docker/entrypoint.sh"]
 CMD ["/workspace/Human-AI-Collab/docker/run_demo.sh"]

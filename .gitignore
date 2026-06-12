@@ -57,3 +57,4 @@ Thumbs.db
 # Docker / compose local env
 .env
 .env.local
+.env.cloud
