@@ -20,3 +20,15 @@ Score decomposition from the recorded poses:
 Gear 2 and gear 4 never satisfied their pin tests; the carrier never satisfied the ring test. The score dropped after the transient reducer alignment. Native termination at the schedule bound auto-reset the environment, which is why `final_score` is 0 while the preserved `best_score` is 3.
 
 Post-run source history identified an embodiment/configuration mismatch: the current 0.15 m external/table workspace offset was introduced while R1 Lite was active in May 2026, whereas the R1 public-data/checkpoint-era source and the still-current learned-agent environment use 0.20 m. The next exploratory iteration changes only that offset back to 0.20 m.
+
+## Iteration 1 — 0.20 m R1 workspace
+
+Status: **FAIL, improved to best score 4/6**.
+
+- All three carrier-pin relations scored, versus two in the initial run.
+- The fourth point was a transient reducer/gear-4 relation.
+- The ring was assigned to the left arm at initial `(x≈0.639, y≈0.187)` but never reached the carrier; its final pre-reset Y remained near `0.171`.
+- Result SHA-256: `033292a0a67b46f92f06439e5c442d393a56feff4f89f3e6fb046d6dbe176864`.
+- Console SHA-256: `24cac8acee23b79fe39d61cef30fdbe98c3b747a1283b765d4d8e349d84e458a`.
+
+H6 is supported because score improved above 3; the 0.20 m restoration is retained. Stage B remains failed because carrier/ring and middle-gear/ring never scored.

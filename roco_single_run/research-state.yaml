@@ -53,9 +53,15 @@ hypotheses:
     priority: high
   - id: H6
     statement: "Restoring the R1/checkpoint-era 0.20 m table and external-environment workspace offset increases the official rule-oracle score above 3."
-    status: active
+    status: supported
     motivation: "The 0.15 m offset was introduced after R1 Lite became default, while the learned-agent cfg and December 2025 R1 source remain at 0.20 m."
     parent: H5
+    priority: high
+  - id: H7
+    statement: "At least one of seeds 17, 23, and 42 improves the corrected-workspace rule oracle above score 4 because ring pick success is randomized-start sensitive."
+    status: active
+    motivation: "Seed 2026 mounted all three pin gears but lost the left-arm ring grasp from a positive-Y initial placement."
+    parent: H6
     priority: high
 
 experiments:
@@ -63,13 +69,13 @@ experiments:
   baseline_value: null
   best_value: null
   total_runs: 0
-  diagnostic_runs: 3
+  diagnostic_runs: 4
   trajectory: []
 
 outer_loop:
-  cycle: 2
-  last_direction: "R1 workspace geometry"
-  last_reflection: "The official R1 oracle ran without infrastructure errors but scored only 3/6. Source history shows it was paired with a later R1-Lite workspace offset, so the next run isolates that one factor."
+  cycle: 3
+  last_direction: "randomized ring placement"
+  last_reflection: "The R1-era offset fixed all three carrier-pin mounts and improved best score 3 to 4, but ring transport failed. Test preregistered seeds before modifying the official grasp."
 
 workspace:
   findings: "findings.md"

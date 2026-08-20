@@ -19,6 +19,17 @@ parser.add_argument(
 parser.add_argument("--seed", type=int, default=2026)
 parser.add_argument("--max-steps", type=int, default=700)
 parser.add_argument("--output", type=Path, required=True)
+parser.add_argument(
+    "--classification",
+    choices=("confirmatory", "exploratory"),
+    default="confirmatory",
+    help="Experiment classification recorded in the result.",
+)
+parser.add_argument(
+    "--save-phase-images",
+    action="store_true",
+    help="Save RGB observations at ring pick/mount phase boundaries.",
+)
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 
@@ -28,6 +39,7 @@ simulation_app = app_launcher.app
 
 import gymnasium as gym  # noqa: E402
 import torch  # noqa: E402
+from PIL import Image  # noqa: E402
 
 import Galaxea_Lab_External.tasks  # noqa: E402,F401
 from Galaxea_Lab_External.robots import ACTIVE_ROBOT_BUNDLE  # noqa: E402
@@ -50,10 +62,20 @@ def _object_poses(base_env) -> dict:
     }
 
 
+def _save_rgb_observations(observations: dict, output_dir: Path, physics_step: int) -> dict:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    saved = {}
+    for key in ("head_rgb", "left_hand_rgb", "right_hand_rgb"):
+        target = output_dir / f"physics_{physics_step:04d}_{key}.png"
+        Image.fromarray(observations["policy"][key][0].detach().cpu().numpy()).save(target)
+        saved[key] = str(target)
+    return saved
+
+
 def main() -> None:
     result = {
         "stage": "B",
-        "classification": "confirmatory",
+        "classification": args.classification,
         "task": args.task,
         "seed": args.seed,
         "max_steps": args.max_steps,
@@ -84,8 +106,15 @@ def main() -> None:
                 "initial_score_time_s": float(initial_time_s),
                 "initial_object_poses": _object_poses(base_env),
                 "score_transitions": [],
+                "phase_snapshots": [],
             }
         )
+
+        snapshot_physics_steps = {
+            int(value.item())
+            for phase_name in ("count_step_11", "count_step_12")
+            for value in getattr(base_env.rule_policy, phase_name)
+        }
 
         best_score = int(initial_score)
         last_transition_score = int(initial_score)
@@ -112,6 +141,25 @@ def main() -> None:
                     }
                 )
                 last_transition_score = score
+            if policy_count in snapshot_physics_steps:
+                snapshot = {
+                    "env_step": steps_completed,
+                    "physics_step": policy_count,
+                    "score": score,
+                    "ring_arm": base_env.rule_policy.gear_to_pin_map["ring_gear"]["arm"],
+                    "ring_pose": _object_poses(base_env)["ring_gear"],
+                    "left_gripper_position_m": float(
+                        base_env.robot.data.joint_pos[0, base_env._left_gripper_dof_idx[0]].item()
+                    ),
+                    "right_gripper_position_m": float(
+                        base_env.robot.data.joint_pos[0, base_env._right_gripper_dof_idx[0]].item()
+                    ),
+                }
+                if args.save_phase_images:
+                    snapshot["rgb_files"] = _save_rgb_observations(
+                        observations, args.output.parent / "phase_images", policy_count
+                    )
+                result["phase_snapshots"].append(snapshot)
             if steps_completed % 25 == 0 or score >= 6:
                 print(
                     f"ROCO_STAGE_B_PROGRESS env_step={steps_completed} "

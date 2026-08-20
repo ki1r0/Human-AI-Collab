@@ -96,6 +96,6 @@
 - **Hypothesis:** Selecting R1 alone is insufficient because current table/external cfg offsets were changed from 0.20 m to 0.15 m after R1 Lite became the default.
 - **Evidence:** December 2025 R1 source uses 0.20 m everywhere; May 2026 commit `5631142` changes the table/external environment to 0.15 m; current learned-agent cfg still uses 0.20 m.
 - **Experiment:** Restore only the table and external environment to the R1/checkpoint-era 0.20 m workspace and repeat the locked oracle.
-- **Result:** Pending.
+- **Result:** Supported but insufficient — best score improved from 3 to 4 and all three pin gears mounted; ring/carrier still failed.
 - **Fix:** `prepare_official_checkout.py` now asserts/restores 0.20 m for the table, external environment, and agent environment whenever the R1 integration is prepared.
-- **Regression status:** OPEN.
+- **Regression status:** PARTIAL — 0.20 m retained; randomized ring-placement sweep pending.
