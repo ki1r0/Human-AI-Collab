@@ -278,9 +278,11 @@
   same unilateral behavior repeats, reject this checkpoint for full-task success
   and test the separately pinned base ACT candidate whose model card describes
   later assembly phases.
-- **Result:** Seeds 23, 17, and 42 FAIL at best/final 1/1, 0/0, and 0/0. Seeds 17/42
+- **Result:** Seeds 23, 17, 42, and 2026 FAIL at best/final 1/1, 0/0, 0/0,
+  and 0/0. Seeds 17/42/2026
   reproduced the near-static right side even more strongly (joint std
   0.0010–0.0048) while failing the left-arm first placement.
 - **Fix:** None. Do not synthesize right-arm actions, splice policies, or alter
   temporal history.
-- **Regression status:** PENDING final `_2` seed 2026.
+- **Regression status:** REFUTED for `_2` as a full-task policy. Test the base
+  candidate independently; do not mix or splice checkpoints.

@@ -23,6 +23,7 @@ The public official repository contains no learned checkpoint or normalization s
 - Stage C passes with three visually inspected, actively refreshed RGB feeds and canonical finite 14-D qpos.
 - Stage D strictly loads the 83,923,087-parameter candidate and paired stats, then passes normalization, chunk, temporal aggregation, denormalization, reorder, and reset checks on a real live observation.
 - The full official DataReplay episode executed all 590 actions but failed its locked residual-direction threshold and scored 0 on a visibly different reset layout. A fresh independently preregistered equivalent-interface probe then passed all 14 channels in both directions with 1.0 direction agreement and about 0.00188 target error.
+- Four genuine closed-loop `roco_model_act_2` episodes completed at scores `[1,0,0,0]`. The seed-23 left arm genuinely mounted one gear, but right-arm action variance stayed tiny and no right-arm task phase appeared on any seed; this candidate is refuted as a full-task solution under the reproduced contract.
 
 ## Patterns and Insights
 

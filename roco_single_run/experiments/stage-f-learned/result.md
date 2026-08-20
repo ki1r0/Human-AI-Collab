@@ -64,3 +64,28 @@ Status: **FAIL** (`max_steps`, best/final score 0/0).
   `77c36d2d...b3ec1`.
 
 Next locked run: seed 2026, unchanged policy and runner.
+
+## Seed 2026
+
+Status: **FAIL** (`max_steps`, best/final score 0/0).
+
+- Completed all 590 learned steps and every integrity/evidence check without a
+  score transition.
+- Right-arm action standard deviations remained 0.0011–0.0055 and right-gripper
+  std 0.000602, reproducing the unilateral policy for a fourth layout.
+- Evidence hashes: result `7ed921a9...ca78c`, trace
+  `c8c9c3af...7cfd6`, video `17cd31a5...5517a`, console
+  `1a402e7a...6ca4e`.
+
+## `roco_model_act_2` conclusion
+
+The fixed four-seed sequence is **FAIL** with best scores `[1,0,0,0]`. Every run
+strictly loaded the model, used 590 fresh triplet-camera observations, produced
+finite actions, recorded a verified 591-frame H.264 episode, and shut down
+cleanly. The repeated near-static right arm refutes this checkpoint as a public
+full-task Task 1 solution under the reproduced contract. The only scored event
+was one genuine left-arm gear placement on seed 23.
+
+The reproduction remains in progress with a separately pinned base ACT
+candidate whose own model card describes broader later assembly phases. It must
+pass a new strict policy-only gate before rollout.

@@ -119,16 +119,22 @@ hypotheses:
     priority: high
   - id: H17
     statement: "The pinned third-party RoCo ACT candidate reaches explicit official Task 1 score 6 in a genuine live closed-loop episode on at least one preregistered seed."
-    status: testing_seed_2026_after_scores_1_0_0
+    status: refuted_scores_1_0_0_0_unilateral_policy
     motivation: "Environment, observation, real-policy, and action-interface gates are complete; empirical learned task success is the remaining primary claim."
     parent: H3
+    priority: high
+  - id: H18
+    statement: "The separately published yjsm1203/roco_model_act base checkpoint is architecture-compatible and can produce a broader full-task learned rollout than roco_model_act_2."
+    status: testing_policy_gate
+    motivation: "Its direct model card describes training on all filtered gearbox episodes and phases after pin insertion, whereas _2 repeated a left-only first subtask over four seeds."
+    parent: H17
     priority: high
 
 experiments:
   proxy_metric: "Highest official environment assembly score in a live learned-policy rollout; target score >= 6 with fresh observations at every step."
   baseline_value: 1
   best_value: 1
-  total_runs: 3
+  total_runs: 4
   diagnostic_runs: 24
   trajectory:
     - run: 1
@@ -155,11 +161,19 @@ experiments:
       status: FAIL
       termination: max_steps
       checkpoint: roco_model_act_2
+    - run: 4
+      seed: 2026
+      steps: 590
+      best_score: 0
+      final_score: 0
+      status: FAIL
+      termination: max_steps
+      checkpoint: roco_model_act_2
 
 outer_loop:
-  cycle: 19
-  last_direction: "Genuine closed-loop ACT rollout, final preregistered roco_model_act_2 seed 2026"
-  last_reflection: "Seed 42 also completed cleanly at score 0 with right-arm std only 0.0011–0.0047. Run the final fixed seed; if unilateral behavior persists, reject _2 as a full-task candidate and preregister the separately described base ACT checkpoint."
+  cycle: 20
+  last_direction: "Strict policy gate for separately pinned yjsm1203/roco_model_act"
+  last_reflection: "The complete _2 sequence scored [1,0,0,0] and reproduced near-static right-arm outputs on every seed, refuting it as a full-task policy. Pin the base candidate by immutable revision/hash, parameterize hash assertions without changing inference math, and require the entire Stage D gate before rollout."
 
 workspace:
   findings: "findings.md"
