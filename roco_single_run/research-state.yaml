@@ -135,7 +135,7 @@ experiments:
   baseline_value: 1
   best_value: 1
   total_runs: 4
-  diagnostic_runs: 25
+  diagnostic_runs: 26
   trajectory:
     - run: 1
       seed: 23
@@ -171,9 +171,9 @@ experiments:
       checkpoint: roco_model_act_2
 
 outer_loop:
-  cycle: 21
-  last_direction: "Preregistered live seed-23 rollout for strictly gated yjsm1203/roco_model_act"
-  last_reflection: "The independently pinned base candidate passed the full Stage D gate and produced numerically distinct finite actions without any inference-path change. Preserve the locked hash/revision and run seed 23 through the same 590-step live episode contract before drawing behavioral conclusions."
+  cycle: 22
+  last_direction: "Relaunch preregistered base-candidate seed 23 with the resolved vendored ACT package path"
+  last_reflection: "The first launch stopped before model construction because PYTHONPATH named the checkout's nonexistent top-level VLA/ACT directory. Preserve the ERROR log, change only PYTHONPATH to the located vendored package parent, and relaunch in a fresh directory; this produced no learned sample and does not count in the seed sequence."
 
 workspace:
   findings: "findings.md"

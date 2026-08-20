@@ -112,3 +112,11 @@ Evidence under ignored run directory `runs/policy_probe_base/`:
 
 Next locked run: base candidate seed 23 under the unchanged 590-step live
 closed-loop contract.
+
+The first launch attempt stopped before model construction because its
+container `PYTHONPATH` named a nonexistent checkout-level ACT directory. No
+policy inference or environment step occurred. The preserved ERROR console is
+`runs/learned_base_seed23_attempt1_error/console.log` (8,301 bytes, SHA-256
+`842816767871a2ad7ecb02b5f71665e82ad48dcba9bf98cdfe955df84b54d516`).
+The relaunch changes only that path to the located vendored ACT package parent
+and therefore remains the preregistered seed-23 run.
