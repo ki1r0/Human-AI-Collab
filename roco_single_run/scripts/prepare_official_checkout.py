@@ -76,6 +76,10 @@ def _patch_collision_offsets(path: Path) -> dict:
     def active_count(fragment: str) -> int:
         return len(re.findall(rf"^        {re.escape(fragment)}", source, flags=re.MULTILINE))
 
+    def replace_active(original: str, replacement: str) -> None:
+        nonlocal source
+        source = source.replace(f"        {original}", f"        {replacement}")
+
     negative_original_count = active_count(negative_original) + active_count(negative_previous)
     negative_patched_count = active_count(negative_patched)
     if negative_original_count not in (0, 3) or negative_patched_count not in (0, 3):
@@ -84,8 +88,8 @@ def _patch_collision_offsets(path: Path) -> dict:
             f"original={negative_original_count}, patched={negative_patched_count}"
         )
     if negative_original_count == 3:
-        source = source.replace(negative_original, negative_patched)
-        source = source.replace(negative_previous, negative_patched)
+        replace_active(negative_original, negative_patched)
+        replace_active(negative_previous, negative_patched)
 
     carrier_original_count = active_count(carrier_original) + active_count(carrier_previous)
     carrier_patched_count = active_count(carrier_patched)
@@ -95,8 +99,8 @@ def _patch_collision_offsets(path: Path) -> dict:
             f"original={carrier_original_count}, patched={carrier_patched_count}"
         )
     if carrier_original_count == 1:
-        source = source.replace(carrier_original, carrier_patched)
-        source = source.replace(carrier_previous, carrier_patched)
+        replace_active(carrier_original, carrier_patched)
+        replace_active(carrier_previous, carrier_patched)
 
     if (
         len(re.findall(rf"^        {re.escape(negative_patched)}", source, flags=re.MULTILINE)) != 3
