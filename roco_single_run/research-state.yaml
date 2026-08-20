@@ -83,9 +83,15 @@ hypotheses:
     priority: high
   - id: H11
     statement: "Extending reducer release from 0.5 s to 1.5 s lets the right gripper clear the part before retreat and preserves the assembled stack."
-    status: active
+    status: refuted
     motivation: "At the 0.5 s release boundary the right gripper has moved only from 6.84 mm to 7.17 mm toward a 40 mm command, so the retreat drags the still-grasped reducer and assembly."
     parent: H10
+    priority: high
+  - id: H12
+    statement: "Raising the reducer endpoint to 40 mm prevents ring compression, unjams the gripper, and preserves the stack through release."
+    status: active
+    motivation: "At the 30 mm endpoint the reducer pushes the ring down by about 10.3 mm before release and the gripper closes slightly despite a 40 mm open command."
+    parent: H11
     priority: high
 
 experiments:
@@ -93,13 +99,13 @@ experiments:
   baseline_value: null
   best_value: null
   total_runs: 0
-  diagnostic_runs: 11
+  diagnostic_runs: 12
   trajectory: []
 
 outer_loop:
-  cycle: 7
-  last_direction: "longer reducer gripper release"
-  last_reflection: "The 30 mm endpoint preserves score 5 until late release and ends better than 25 mm, but the gripper opens only 0.33 mm of the required 33 mm before retreat. Retain the endpoint and extend only the release phase to 1.5 s."
+  cycle: 8
+  last_direction: "reducer contact clearance"
+  last_reflection: "A clean 1.5 s release run leaves the gripper closed and still collapses at step 3270. The reducer has already driven the ring down 10.3 mm at release start, so add 10 mm endpoint clearance while retaining the extended observation window."
 
 workspace:
   findings: "findings.md"

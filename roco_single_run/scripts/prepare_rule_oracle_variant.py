@@ -34,6 +34,13 @@ RAISED_REDUCER_HEIGHT = """        elif gear_id == 6: # Reducer
                 self.current_target_orientation = root_state[:, 3:7].clone()
             obj_height_offset = 0.023 + 0.02
             mount_height_offset = 0.030"""
+CLEARANCE_REDUCER_HEIGHT = """        elif gear_id == 6: # Reducer
+            root_state = self.sun_planetary_gear_4.data.root_state_w.clone()
+            if self.count == count_step[0]:
+                self.current_target_position = root_state[:, :3].clone()
+                self.current_target_orientation = root_state[:, 3:7].clone()
+            obj_height_offset = 0.023 + 0.02
+            mount_height_offset = 0.040"""
 OFFICIAL_REDUCER_RELEASE = (
     "        self.time_step_14 = torch.tensor("
     "[0.0, 0.5, 0.5, 0.5, 0.5], device=sim.device)"
@@ -61,7 +68,7 @@ def main() -> None:
     parser.add_argument(
         "--reducer-mount-height-m",
         type=float,
-        choices=(0.025, 0.030),
+        choices=(0.025, 0.030, 0.040),
         default=0.025,
     )
     parser.add_argument(
@@ -101,25 +108,22 @@ def main() -> None:
         source = source.replace(replacement, target)
         status = "patched"
 
-    official_height_count = source.count(OFFICIAL_REDUCER_HEIGHT)
-    raised_height_count = source.count(RAISED_REDUCER_HEIGHT)
-    if (official_height_count, raised_height_count) not in ((1, 0), (0, 1)):
+    height_variants = {
+        0.025: OFFICIAL_REDUCER_HEIGHT,
+        0.030: RAISED_REDUCER_HEIGHT,
+        0.040: CLEARANCE_REDUCER_HEIGHT,
+    }
+    height_counts = {height: source.count(fragment) for height, fragment in height_variants.items()}
+    if sum(height_counts.values()) != 1 or any(count not in (0, 1) for count in height_counts.values()):
         raise RuntimeError(
             "Unexpected reducer mount-height source layout: "
-            f"official={official_height_count}, raised_variant={raised_height_count}"
+            + ", ".join(f"{height:.3f}={count}" for height, count in height_counts.items())
         )
-    height_target = (
-        RAISED_REDUCER_HEIGHT
-        if args.reducer_mount_height_m == 0.030
-        else OFFICIAL_REDUCER_HEIGHT
-    )
-    height_replacement = (
-        OFFICIAL_REDUCER_HEIGHT
-        if args.reducer_mount_height_m == 0.030
-        else RAISED_REDUCER_HEIGHT
-    )
+    height_target = height_variants[args.reducer_mount_height_m]
     if source.count(height_target) != 1:
-        source = source.replace(height_replacement, height_target)
+        for height_fragment in height_variants.values():
+            if height_fragment != height_target:
+                source = source.replace(height_fragment, height_target)
         status = "patched"
 
     official_release_count = source.count(OFFICIAL_REDUCER_RELEASE)

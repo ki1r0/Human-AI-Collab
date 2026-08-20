@@ -83,3 +83,16 @@ Status: **DIAGNOSTIC FAIL at 5/6; H10 supported but insufficient**.
 - Console SHA-256: `5e99b45562b89ce9f3b5931ee6681fb6c7a5396f0a5a135965c0d6e9ec914eaf`.
 
 The next test retains the mechanically improved 30 mm endpoint and changes only reducer release duration.
+
+## Iteration 6 — 1.5 s reducer release
+
+Status: **CLEAN FAIL at 5/6; H11 refuted**.
+
+- The full 3,420-step schedule completed on GPU 3 with no renderer, physics, asset, NaN, or Python errors.
+- Best score was 5 and last pre-reset reward was 4; stable success was not reached.
+- Right-gripper position changed 0.006844 -> 0.006810 m during the extended open command, so added time did not release the part.
+- Ring z fell 0.921566 -> 0.911341 m during reducer descent before release, exposing excessive contact/compression at the 30 mm endpoint.
+- Result SHA-256: `f289481b4550a929df318022f1d223bb03dc2b5933cafe952667469d38030ed9`.
+- Console SHA-256: `63c2c629038be261a411e569e32e3d7a74f6854b9ee2b6929dac0fe6d239e686`.
+
+H11 is rejected. The next test changes contact clearance rather than adding release time.

@@ -146,6 +146,16 @@
 - **Hypothesis:** Extending only the reducer open-command phase from 0.5 s to 1.5 s lets the gripper clear the part before retreat.
 - **Evidence:** Right gripper position is 0.006844 m at release start (step 3,220) and only 0.007173 m at the retreat boundary (step 3,270), despite a 0.04 m target. The 3,315 RGB frame visibly shows the retreating closed gripper and disturbed gearbox.
 - **Experiment:** Keep zero ring rotation and the 0.030 m reducer endpoint; change `time_step_14` release duration only from 0.5 s to 1.5 s. Total schedule becomes 3,420 physics steps / 684 environment steps, within the locked 700-step bound.
+- **Result:** Refuted — after 1.5 s the gripper was slightly more closed (0.006810 m) and the score had fallen from 5 to 3. The failure is not insufficient time.
+- **Fix:** Do not add more release time. Diagnose the reducer/ring contact that exists before the open command.
+- **Regression status:** FAIL for H11. Clean result SHA-256 `f289481b4550a929df318022f1d223bb03dc2b5933cafe952667469d38030ed9`.
+
+## ISSUE-016 — Reducer endpoint compresses ring before release
+
+- **Symptom:** At the 30 mm reducer endpoint, the ring drops about 10.3 mm during descent and the right gripper cannot open under contact load.
+- **Hypothesis:** A 40 mm reducer endpoint restores contact clearance, lets the reducer drop gently when released, and permits the gripper to open.
+- **Evidence:** Ring z is 0.921566 m at descent start (step 3,170) and 0.911341 m at release start (3,220); reducer z is 0.924517 m. Middle gear and ring are nearly coplanar, showing the reducer has driven the ring down rather than seated above it.
+- **Experiment:** Retain the 1.5 s release window and change only reducer mount height 0.030 -> 0.040 m. All targets/timings otherwise remain fixed.
 - **Result:** Pending.
-- **Fix:** Pending Stage B iteration 6.
+- **Fix:** Pending Stage B iteration 7.
 - **Regression status:** OPEN.
