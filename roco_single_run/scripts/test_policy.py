@@ -19,6 +19,16 @@ parser.add_argument("--stats", type=Path, required=True)
 parser.add_argument("--observation", type=Path, required=True)
 parser.add_argument("--output", type=Path, required=True)
 parser.add_argument("--device", default="cuda:0")
+parser.add_argument(
+    "--expected-checkpoint-sha256",
+    default="a2d0aa42ec1d39609637a40ac09b420ebc16335a199807ae42e2edff2bfce2b1",
+)
+parser.add_argument(
+    "--expected-stats-sha256",
+    default="4627d5316f8d6a29915124ea198cf16f82d82b5ea98d55ed3d0f9b5bb7da0b4e",
+)
+parser.add_argument("--candidate-id", default="yjsm1203/roco_model_act_2")
+parser.add_argument("--candidate-revision", default="52344a203e0739638cb2c7b11ea632e7b2eb2608")
 args = parser.parse_args()
 
 
@@ -52,6 +62,10 @@ def main() -> None:
         "camera_order": list(CAMERA_NAMES),
         "policy_config": POLICY_CONFIG,
         "temporal_decay": 0.1,
+        "candidate_id": args.candidate_id,
+        "candidate_revision": args.candidate_revision,
+        "expected_checkpoint_sha256": args.expected_checkpoint_sha256,
+        "expected_stats_sha256": args.expected_stats_sha256,
     }
     try:
         with np.load(args.observation) as package:
@@ -59,7 +73,12 @@ def main() -> None:
             qpos = package["qpos"].copy()
 
         adapter = RocoActPolicy(
-            args.checkpoint, args.stats, device=args.device, temporal_decay=0.1
+            args.checkpoint,
+            args.stats,
+            device=args.device,
+            temporal_decay=0.1,
+            expected_checkpoint_sha256=args.expected_checkpoint_sha256,
+            expected_stats_sha256=args.expected_stats_sha256,
         )
         first = adapter.predict_trace(qpos, images)
         second = adapter.predict_trace(qpos, images)

@@ -20,6 +20,17 @@ parser.add_argument("--stats", type=Path, required=True)
 parser.add_argument("--output-dir", type=Path, required=True)
 parser.add_argument("--max-steps", type=int, default=590)
 parser.add_argument("--video-fps", type=int, default=20)
+parser.add_argument(
+    "--expected-checkpoint-sha256",
+    default="a2d0aa42ec1d39609637a40ac09b420ebc16335a199807ae42e2edff2bfce2b1",
+)
+parser.add_argument(
+    "--expected-stats-sha256",
+    default="4627d5316f8d6a29915124ea198cf16f82d82b5ea98d55ed3d0f9b5bb7da0b4e",
+)
+parser.add_argument("--candidate-id", default="yjsm1203/roco_model_act_2")
+parser.add_argument("--candidate-revision", default="52344a203e0739638cb2c7b11ea632e7b2eb2608")
+parser.add_argument("--seed-sequence", default="23,17,42,2026")
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 
@@ -108,12 +119,19 @@ def main() -> None:
     video_path = output_dir / "episode.mp4"
     trace_path = output_dir / "trace.npz"
     result_path = output_dir / "result.json"
+    seed_sequence = [int(value) for value in args.seed_sequence.split(",") if value]
+    if args.seed not in seed_sequence:
+        raise ValueError(f"Seed {args.seed} is not in declared sequence {seed_sequence}")
     result: dict[str, object] = {
         "stage": "F",
         "classification": "confirmatory" if args.seed == 23 else "preregistered_sensitivity",
         "task": args.task,
         "seed": args.seed,
-        "seed_sequence": [23, 17, 42, 2026],
+        "seed_sequence": seed_sequence,
+        "candidate_id": args.candidate_id,
+        "candidate_revision": args.candidate_revision,
+        "expected_checkpoint_sha256": args.expected_checkpoint_sha256,
+        "expected_stats_sha256": args.expected_stats_sha256,
         "container_image": CONTAINER_IMAGE,
         "official_source_commit": SOURCE_COMMIT,
         "active_robot_bundle": ACTIVE_ROBOT_BUNDLE.name,
@@ -141,6 +159,8 @@ def main() -> None:
             args.stats,
             device=args.device,
             temporal_decay=0.1,
+            expected_checkpoint_sha256=args.expected_checkpoint_sha256,
+            expected_stats_sha256=args.expected_stats_sha256,
         )
         policy.reset()
         writer = imageio.get_writer(
@@ -360,9 +380,9 @@ def main() -> None:
         checks = {
             "r1_bundle": ACTIVE_ROBOT_BUNDLE.name == "r1",
             "checkpoint_hash_matches": policy.checkpoint_sha256
-            == "a2d0aa42ec1d39609637a40ac09b420ebc16335a199807ae42e2edff2bfce2b1",
+            == args.expected_checkpoint_sha256,
             "stats_hash_matches": policy.stats_sha256
-            == "4627d5316f8d6a29915124ea198cf16f82d82b5ea98d55ed3d0f9b5bb7da0b4e",
+            == args.expected_stats_sha256,
             "strict_model_load": not policy.missing_keys and not policy.unexpected_keys,
             "physics_dt_0_01": abs(float(base_env.physics_dt) - 0.01) < 1e-9,
             "control_dt_0_05": abs(float(base_env.step_dt) - 0.05) < 1e-9,

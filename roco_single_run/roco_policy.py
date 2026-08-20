@@ -58,21 +58,34 @@ class RocoActPolicy:
         *,
         device: str = "cuda:0",
         temporal_decay: float = 0.1,
+        expected_checkpoint_sha256: str = CHECKPOINT_SHA256,
+        expected_stats_sha256: str = STATS_SHA256,
     ) -> None:
         self.checkpoint_path = Path(checkpoint_path).resolve()
         self.stats_path = Path(stats_path).resolve()
         self.device = torch.device(device)
         self.temporal_decay = float(temporal_decay)
         self.num_queries = int(POLICY_CONFIG["num_queries"])
+        self.expected_checkpoint_sha256 = expected_checkpoint_sha256.lower()
+        self.expected_stats_sha256 = expected_stats_sha256.lower()
+        for label, digest in (
+            ("checkpoint", self.expected_checkpoint_sha256),
+            ("stats", self.expected_stats_sha256),
+        ):
+            if len(digest) != 64 or any(character not in "0123456789abcdef" for character in digest):
+                raise ValueError(f"Invalid expected {label} SHA-256: {digest!r}")
 
         self.checkpoint_sha256 = file_sha256(self.checkpoint_path)
         self.stats_sha256 = file_sha256(self.stats_path)
-        if self.checkpoint_sha256 != CHECKPOINT_SHA256:
+        if self.checkpoint_sha256 != self.expected_checkpoint_sha256:
             raise RuntimeError(
-                f"Checkpoint hash mismatch: {self.checkpoint_sha256} != {CHECKPOINT_SHA256}"
+                "Checkpoint hash mismatch: "
+                f"{self.checkpoint_sha256} != {self.expected_checkpoint_sha256}"
             )
-        if self.stats_sha256 != STATS_SHA256:
-            raise RuntimeError(f"Stats hash mismatch: {self.stats_sha256} != {STATS_SHA256}")
+        if self.stats_sha256 != self.expected_stats_sha256:
+            raise RuntimeError(
+                f"Stats hash mismatch: {self.stats_sha256} != {self.expected_stats_sha256}"
+            )
 
         # NumPy 2 pickles name the private module ``numpy._core``.  The pinned
         # stats contain only ndarray reconstruction, but Isaac Lab ships NumPy
