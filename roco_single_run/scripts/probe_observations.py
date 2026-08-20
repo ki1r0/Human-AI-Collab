@@ -82,9 +82,9 @@ def main() -> None:
 
         qpos_parts = (
             policy["left_arm_joint_pos"],
-            policy["left_gripper_joint_pos"],
+            policy["left_gripper_joint_pos"].unsqueeze(-1),
             policy["right_arm_joint_pos"],
-            policy["right_gripper_joint_pos"],
+            policy["right_gripper_joint_pos"].unsqueeze(-1),
         )
         qpos = torch.cat(qpos_parts, dim=-1)
         qpos_names = (

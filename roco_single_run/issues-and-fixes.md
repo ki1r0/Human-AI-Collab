@@ -179,3 +179,13 @@
 - **Result:** Refuted — right-gripper position reached 0.007058 m at the close/lift boundary, but the reducer remained within 0.3 mm of its source and returned fully to the table by the next phase. Best/terminal score was 4/4.
 - **Fix:** Restore the official 0 m reducer close target. Do not use a weaker grasp or a non-reference teleport/release mechanism in the learned-policy baseline.
 - **Regression status:** FAIL for H14. Clean result SHA-256 `725b90eb7e13bc2e2c7c607018133771d7880396206a23baa8ae9907d67f2550`.
+
+## ISSUE-019 — Live gripper observations omit a feature dimension
+
+- **Symptom:** The first Stage C probe failed while concatenating qpos: arm observations are `(1, 6)` but each gripper observation is `(1,)`.
+- **Hypothesis:** The policy contract requires treating each scalar gripper as one feature, producing `(1, 1)` before concatenation.
+- **Evidence:** The live tensor error was `Tensors must have same number of dimensions: got 2 and 1`; the official runner likewise builds a 14-D vector from six arm values plus each scalar gripper.
+- **Experiment:** Unsqueeze only the last dimension of both live gripper observations, retain the canonical `[L arm, L grip, R arm, R grip]` ordering, and repeat the probe.
+- **Result:** Pending.
+- **Fix:** Explicit `.unsqueeze(-1)` on both gripper observations in the Stage C probe.
+- **Regression status:** OPEN.
