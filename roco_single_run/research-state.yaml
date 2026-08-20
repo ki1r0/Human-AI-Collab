@@ -119,23 +119,31 @@ hypotheses:
     priority: high
   - id: H17
     statement: "The pinned third-party RoCo ACT candidate reaches explicit official Task 1 score 6 in a genuine live closed-loop episode on at least one preregistered seed."
-    status: testing_seed_23
+    status: testing_seed_17_after_seed_23_failed_score_1
     motivation: "Environment, observation, real-policy, and action-interface gates are complete; empirical learned task success is the remaining primary claim."
     parent: H3
     priority: high
 
 experiments:
   proxy_metric: "Highest official environment assembly score in a live learned-policy rollout; target score >= 6 with fresh observations at every step."
-  baseline_value: null
-  best_value: null
-  total_runs: 0
+  baseline_value: 1
+  best_value: 1
+  total_runs: 1
   diagnostic_runs: 24
-  trajectory: []
+  trajectory:
+    - run: 1
+      seed: 23
+      steps: 590
+      best_score: 1
+      final_score: 1
+      status: FAIL
+      termination: max_steps
+      checkpoint: roco_model_act_2
 
 outer_loop:
-  cycle: 16
-  last_direction: "Genuine closed-loop ACT rollout, seed 23"
-  last_reflection: "Stage E passes through an independently preregistered reversible interface test with exact mapping, 1.0 direction agreement, ~0.993 displacement cosine, and ~0.00188 settling error in all four phases. Lock the learned runner, full evidence bundle, explicit scorer, and fixed seed sequence before the first rollout."
+  cycle: 17
+  last_direction: "Genuine closed-loop ACT rollout, preregistered seed 17"
+  last_reflection: "Seed 23 completed cleanly and genuinely mounted one pin gear at step 81, but remained score 1 through step 590. Video/trace show a strongly active left arm and near-static right arm; run the unchanged next seed to test whether this is reset sensitivity before rejecting the candidate as a full-task policy."
 
 workspace:
   findings: "findings.md"

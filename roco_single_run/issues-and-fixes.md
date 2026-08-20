@@ -261,3 +261,24 @@
 - **Fix:** Retain replay FAIL unchanged and use the independent equivalent result
   as the Stage E acceptance route. The learned runner uses the same shared mapping.
 - **Regression status:** PASS in Stage E iteration 2.
+
+## ISSUE-025 — First learned candidate run activates almost only the left arm
+
+- **Symptom:** Seed 23 reaches score 1 at step 81 but makes no further scored
+  progress through step 590; video shows the right arm staying at reset.
+- **Hypothesis:** This may be reset-layout sensitivity, or `roco_model_act_2` may
+  have learned a dominant first left-arm subtask from its padded integrated data
+  rather than a full bimanual sequence.
+- **Evidence:** The left arm genuinely mounts gear 2. Across the whole run,
+  right-arm action standard deviations are 0.012–0.037 and right-gripper std is
+  0.000642, while left-arm std is 0.099–0.448 and left-gripper std is 0.0102.
+  All cameras are fresh and the shared action interface already passed, so this
+  is not attributable to stale input or reorder failure.
+- **Experiment:** Run the unchanged preregistered seeds 17, 42, and 2026. If the
+  same unilateral behavior repeats, reject this checkpoint for full-task success
+  and test the separately pinned base ACT candidate whose model card describes
+  later assembly phases.
+- **Result:** Seed 23 FAIL at best/final 1/1; sensitivity sequence pending.
+- **Fix:** None. Do not synthesize right-arm actions, splice policies, or alter
+  temporal history.
+- **Regression status:** PENDING Stage F seed 17.
