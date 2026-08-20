@@ -216,6 +216,6 @@
 - **Hypothesis:** The stats were serialized by NumPy 2, while the Isaac Lab image ships NumPy 1.x and exposes the equivalent implementation as `numpy.core`.
 - **Evidence:** `pickletools` finds only `numpy._core.multiarray._reconstruct`, `numpy.ndarray`, and `numpy.dtype` globals; the pinned file contains the expected five arrays and no arbitrary application classes.
 - **Experiment:** After SHA-256 verification and before deserialization, alias `numpy._core` and `numpy._core.multiarray` to their NumPy 1.x equivalents, then retain all strict shape/finite/std checks.
-- **Result:** Pending.
+- **Result:** Supported — the aliases load the exact pinned arrays; all four required arrays are finite `(14,)`, both standard-deviation vectors are positive, and Stage D inference passes.
 - **Fix:** Add the narrow module aliases only in the pinned stats loader.
-- **Regression status:** OPEN.
+- **Regression status:** PASS in Stage D.

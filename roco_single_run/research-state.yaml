@@ -29,13 +29,13 @@ hypotheses:
     priority: high
   - id: H2
     statement: "Training-faithful ACT inference requires RGB division by 255 and qpos standardization using the checkpoint's dataset_stats.pkl."
-    status: active
+    status: supported
     motivation: "The ACT dataset loader and upstream ACT eval path apply both transformations, while scripts/VLA_agent.py omits both."
     parent: null
     priority: high
   - id: H3
     statement: "yjsm1203/roco_model_act_2 is architecture- and embodiment-compatible with the official R1 Task 1 ACT path."
-    status: pending
+    status: supported_policy_gate_rollout_pending
     motivation: "It is a public RoCo-trained ACT checkpoint with matching stats, but it is not organizer-published and includes additional data."
     parent: null
     priority: high
@@ -111,13 +111,13 @@ experiments:
   baseline_value: null
   best_value: null
   total_runs: 0
-  diagnostic_runs: 18
+  diagnostic_runs: 21
   trajectory: []
 
 outer_loop:
-  cycle: 12
-  last_direction: "Real ACT checkpoint and normalization"
-  last_reflection: "Stage C now passes structural, hash, visual, and active-freshness checks. Download the pinned third-party RoCo ACT checkpoint and paired stats, then prove exact weight loading, preprocessing, finite chunk output, temporal aggregation, denormalization, reordering, and reset behavior on the saved live observation."
+  cycle: 13
+  last_direction: "Replay/equivalent action-interface validation"
+  last_reflection: "Stage D strictly loads the real checkpoint and paired stats, produces finite plausible actions from an actual live observation, and passes temporal reset/reorder checks. Locate a compact known trajectory or generate an audited official scripted trajectory to validate the live agent environment action interface before closed-loop ACT execution."
 
 workspace:
   findings: "findings.md"
