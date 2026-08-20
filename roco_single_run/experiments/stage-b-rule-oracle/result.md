@@ -96,3 +96,15 @@ Status: **CLEAN FAIL at 5/6; H11 refuted**.
 - Console SHA-256: `63c2c629038be261a411e569e32e3d7a74f6854b9ee2b6929dac0fe6d239e686`.
 
 H11 is rejected. The next test changes contact clearance rather than adding release time.
+
+## Iteration 7 — 40 mm reducer clearance
+
+Status: **CLEAN FAIL at 5/6; H12 clearance mechanism supported only**.
+
+- Ring z remained 0.921566 -> 0.921716 m through reducer descent, versus collapse to 0.911341 m at 30 mm.
+- Right-gripper position nevertheless changed 0.006805 -> 0.005918 m during release, and the assembly translated laterally by about 15 mm.
+- Best score remained 5; last pre-reset reward and the step-3,415 snapshot were 4.
+- Result SHA-256: `a4e2ef3ec2a03259c3082ba547226f94fa796beddda0fd54d7eaf663ce28eff3`.
+- Console SHA-256: `9ca2080882b20fd278e9d0e4e23da1218732cdc9a29d8d29f2cee69c6eb6b150`.
+
+The 40 mm clearance is retained for the next actuation-authority test; Stage B remains failed.

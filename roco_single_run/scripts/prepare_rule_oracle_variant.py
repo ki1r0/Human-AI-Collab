@@ -49,6 +49,24 @@ EXTENDED_REDUCER_RELEASE = (
     "        self.time_step_14 = torch.tensor("
     "[0.0, 0.5, 0.5, 1.5, 0.5], device=sim.device)"
 )
+R1_GRIPPER_EFFORT_100 = """            "r1_grippers": ImplicitActuatorCfg(
+                joint_names_expr=[".*_gripper_axis1"],
+                effort_limit_sim=100.0,
+                velocity_limit_sim=0.07,
+                stiffness=25000.0,
+                damping=1000.0,
+                friction=0.2,
+                armature=0.2,
+            ),"""
+R1_GRIPPER_EFFORT_200 = """            "r1_grippers": ImplicitActuatorCfg(
+                joint_names_expr=[".*_gripper_axis1"],
+                effort_limit_sim=200.0,
+                velocity_limit_sim=0.07,
+                stiffness=25000.0,
+                damping=1000.0,
+                friction=0.2,
+                armature=0.2,
+            ),"""
 
 
 def _git_head(checkout: Path) -> str:
@@ -76,6 +94,12 @@ def main() -> None:
         type=float,
         choices=(0.5, 1.5),
         default=0.5,
+    )
+    parser.add_argument(
+        "--gripper-effort-limit-n",
+        type=float,
+        choices=(100.0, 200.0),
+        default=100.0,
     )
     args = parser.parse_args()
 
@@ -149,10 +173,34 @@ def main() -> None:
 
     policy_path.write_text(source, encoding="utf-8")
 
+    robots_path = policy_path.with_name("galaxea_robots.py")
+    robot_source = robots_path.read_text(encoding="utf-8")
+    effort_variants = {
+        100.0: R1_GRIPPER_EFFORT_100,
+        200.0: R1_GRIPPER_EFFORT_200,
+    }
+    effort_counts = {
+        effort: robot_source.count(fragment) for effort, fragment in effort_variants.items()
+    }
+    if sum(effort_counts.values()) != 1 or any(count not in (0, 1) for count in effort_counts.values()):
+        raise RuntimeError(
+            "Unexpected R1 gripper-effort source layout: "
+            + ", ".join(f"{effort:.0f}={count}" for effort, count in effort_counts.items())
+        )
+    effort_target = effort_variants[args.gripper_effort_limit_n]
+    if robot_source.count(effort_target) != 1:
+        for effort_fragment in effort_variants.values():
+            if effort_fragment != effort_target:
+                robot_source = robot_source.replace(effort_fragment, effort_target)
+        robots_path.write_text(robot_source, encoding="utf-8")
+        status = "patched"
+
     result = {
         "checkout": str(checkout),
         "commit": head,
         "policy_path": str(policy_path),
+        "robots_path": str(robots_path),
+        "gripper_effort_limit_n": args.gripper_effort_limit_n,
         "ring_rotation_deg": args.ring_rotation_deg,
         "reducer_mount_height_m": args.reducer_mount_height_m,
         "reducer_release_duration_s": args.reducer_release_duration_s,

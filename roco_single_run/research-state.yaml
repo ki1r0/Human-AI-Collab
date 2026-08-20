@@ -89,9 +89,15 @@ hypotheses:
     priority: high
   - id: H12
     statement: "Raising the reducer endpoint to 40 mm prevents ring compression, unjams the gripper, and preserves the stack through release."
-    status: active
+    status: supported_clearance_only
     motivation: "At the 30 mm endpoint the reducer pushes the ring down by about 10.3 mm before release and the gripper closes slightly despite a 40 mm open command."
     parent: H11
+    priority: high
+  - id: H13
+    statement: "Restoring the historical 200 N R1 gripper effort limit overcomes reducer-release contact load without disturbing the seated stack."
+    status: active
+    motivation: "At 40 mm clearance the ring remains seated but the gripper closes under a 100 N cap; the earlier official R1 actuator configuration used a 200 N effort limit."
+    parent: H12
     priority: high
 
 experiments:
@@ -99,13 +105,13 @@ experiments:
   baseline_value: null
   best_value: null
   total_runs: 0
-  diagnostic_runs: 12
+  diagnostic_runs: 13
   trajectory: []
 
 outer_loop:
-  cycle: 8
-  last_direction: "reducer contact clearance"
-  last_reflection: "A clean 1.5 s release run leaves the gripper closed and still collapses at step 3270. The reducer has already driven the ring down 10.3 mm at release start, so add 10 mm endpoint clearance while retaining the extended observation window."
+  cycle: 9
+  last_direction: "R1 gripper release authority"
+  last_reflection: "A clean 40 mm run keeps the ring at its seated height but the 100 N gripper closes further and drags the stack laterally. Restore only the historical 200 N R1 gripper effort cap while holding clearance and timing fixed."
 
 workspace:
   findings: "findings.md"

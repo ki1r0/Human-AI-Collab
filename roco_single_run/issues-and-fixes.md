@@ -156,6 +156,16 @@
 - **Hypothesis:** A 40 mm reducer endpoint restores contact clearance, lets the reducer drop gently when released, and permits the gripper to open.
 - **Evidence:** Ring z is 0.921566 m at descent start (step 3,170) and 0.911341 m at release start (3,220); reducer z is 0.924517 m. Middle gear and ring are nearly coplanar, showing the reducer has driven the ring down rather than seated above it.
 - **Experiment:** Retain the 1.5 s release window and change only reducer mount height 0.030 -> 0.040 m. All targets/timings otherwise remain fixed.
+- **Result:** Partial — at 40 mm, ring z remained 0.9216–0.9217 m through descent, eliminating compression. However, the gripper still closed and dragged the intact stack laterally; stable score remained 4.
+- **Fix:** Retain 40 mm as the clearance branch and isolate gripper actuation authority.
+- **Regression status:** PARTIAL. Clean result SHA-256 `a4e2ef3ec2a03259c3082ba547226f94fa796beddda0fd54d7eaf663ce28eff3`.
+
+## ISSUE-017 — R1 gripper cannot open under reducer contact load
+
+- **Symptom:** Even with reducer/ring clearance, a 0.04 m open target moves the right gripper from 0.006805 m to 0.005918 m over 1.5 s while the grasped stack follows laterally.
+- **Hypothesis:** Restoring the earlier official R1 200 N gripper effort limit gives the release enough authority; the current 100 N cap saturates under contact/friction.
+- **Evidence:** Current `GALAXEA_R1_CFG` uses `effort_limit_sim=100.0`; the pre-December R1 configuration used an explicit 200 N gripper effort limit. Velocity limit is not the observed bottleneck because motion is in the wrong direction.
+- **Experiment:** Keep zero ring rotation, 40 mm reducer clearance, and 1.5 s release; change only R1 gripper effort limit 100 -> 200 N. Stiffness, damping, velocity, friction, armature, and all motion stay fixed.
 - **Result:** Pending.
-- **Fix:** Pending Stage B iteration 7.
+- **Fix:** Pending Stage B iteration 8.
 - **Regression status:** OPEN.
