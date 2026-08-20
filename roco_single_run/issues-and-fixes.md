@@ -176,6 +176,6 @@
 - **Hypothesis:** A reducer-only 0.007 m close target supplies enough geometric retention for transport without storing the squeeze/contact load that prevents release.
 - **Evidence:** The reducer's observed clamped position is about 6.8 mm. The shared controller source currently commands 0 m for every object's close phase, but `gear_id == 6` can be isolated without touching pins or ring.
 - **Experiment:** Keep the best clearance trajectory and 100 N actuator configuration; change only the reducer close target from 0 to 0.007 m.
-- **Result:** Pending.
-- **Fix:** Pending Stage B iteration 9.
-- **Regression status:** OPEN.
+- **Result:** Refuted — right-gripper position reached 0.007058 m at the close/lift boundary, but the reducer remained within 0.3 mm of its source and returned fully to the table by the next phase. Best/terminal score was 4/4.
+- **Fix:** Restore the official 0 m reducer close target. Do not use a weaker grasp or a non-reference teleport/release mechanism in the learned-policy baseline.
+- **Regression status:** FAIL for H14. Clean result SHA-256 `725b90eb7e13bc2e2c7c607018133771d7880396206a23baa8ae9907d67f2550`.

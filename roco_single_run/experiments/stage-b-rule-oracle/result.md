@@ -120,3 +120,15 @@ Status: **CLEAN REGRESSION to 3/6; H13 refuted**.
 - Console SHA-256: `bcca270f080cb4a99d4ba4b1e4dca860c833500baf5064288be4a580b9693c78`.
 
 The 200 N cap is rejected. The next test restores 100 N and changes only reducer grasp preload.
+
+## Iteration 9 — reducer-only 7 mm grasp
+
+Status: **CLEAN FAIL at 4/6; H14 refuted**.
+
+- The full 3,420-step schedule completed with best/terminal score 4/4 and no renderer, physics, asset, NaN, or Python errors.
+- At step 3,070 the right gripper reached 0.007058 m, but reducer position remained near its source at `(0.5263, -0.2488, 0.9014)` m.
+- By step 3,120 the reducer had fallen fully back to the table and the fingers had closed to 0.006740 m. The test therefore never entered a valid reducer-release condition.
+- Result SHA-256: `725b90eb7e13bc2e2c7c607018133771d7880396206a23baa8ae9907d67f2550`.
+- Console SHA-256: `b88626efe8b1333edd9c61c1e1639e740b7bd6ba1e7254293ae5a592adfdc6c8`.
+
+The 7 mm target is rejected and the official 0 m reducer grasp is restored. Stage B remains failed: the best repaired-oracle branch reaches 5/6 transiently but never stable task completion. Its component-level evidence is sufficient to continue interface validation, but any learned rollout failure must be interpreted with this unresolved environment/controller limitation in view.

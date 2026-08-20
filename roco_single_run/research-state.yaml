@@ -101,7 +101,7 @@ hypotheses:
     priority: high
   - id: H14
     statement: "A reducer-only 7 mm close target lowers grasp preload enough to preserve pickup while permitting physical release above the seated stack."
-    status: active
+    status: refuted
     motivation: "Doubling the global effort cap regressed the whole trajectory, while the reducer is squeezed to about 6.8 mm by a zero-position command; the reducer pickup branch can be isolated without changing earlier grasps."
     parent: H13
     priority: high
@@ -111,13 +111,13 @@ experiments:
   baseline_value: null
   best_value: null
   total_runs: 0
-  diagnostic_runs: 14
+  diagnostic_runs: 15
   trajectory: []
 
 outer_loop:
-  cycle: 10
-  last_direction: "Reducer-only grasp preload"
-  last_reflection: "The clean 200 N run regressed to best score 3 and terminal score 1, so global actuator authority is not the release mechanism. Restore 100 N and reduce only the reducer close target to 7 mm, just above its observed 6.8 mm clamped position."
+  cycle: 11
+  last_direction: "Live observation contract"
+  last_reflection: "The 7 mm reducer target is an under-grasp: the fingers reached 7.06 mm but the reducer remained at its source and fell back before transport. Restore the official zero target, preserve Stage B as a diagnosed failure, and advance to the required synchronized observation probe without introducing a non-reference manipulation hack."
 
 workspace:
   findings: "findings.md"
