@@ -189,3 +189,13 @@
 - **Result:** Pending.
 - **Fix:** Explicit `.unsqueeze(-1)` on both gripper observations in the Stage C probe.
 - **Regression status:** OPEN.
+
+## ISSUE-020 — Static hold cannot distinguish a correct frame from a stale frame
+
+- **Symptom:** Reset and first held-step RGB arrays were byte-identical in all three cameras even though the structural Stage C checks passed.
+- **Hypothesis:** The scene and attached cameras are static under an absolute-position hold, so equality is expected but cannot positively prove frame refresh.
+- **Evidence:** The three saved views are valid and distinct on visual inspection, while their reset-to-step mean absolute differences are exactly zero.
+- **Experiment:** After saving the canonical observation, command only a bounded +0.05/-0.05 rad change in the first left/right controlled arm joints for five steps and compare all new camera tensors against clones of the saved tensors.
+- **Result:** Pending.
+- **Fix:** Add an active, diagnostic-only freshness perturbation; keep it outside all policy input and rollout paths.
+- **Regression status:** OPEN.

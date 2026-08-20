@@ -15,6 +15,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--task", default="Template-Galaxea-Lab-Agent-Direct-v0")
 parser.add_argument("--seed", type=int, default=23)
 parser.add_argument("--output-dir", type=Path, required=True)
+parser.add_argument("--freshness-steps", type=int, default=5)
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 
@@ -119,6 +120,31 @@ def main() -> None:
             )
             for key in CAMERA_KEYS
         }
+        main_camera_tensors = {
+            key: policy[key].detach().clone() for key in CAMERA_KEYS
+        }
+        freshness_action = hold_action.clone()
+        freshness_action[:, 0] += 0.05
+        freshness_action[:, 6] -= 0.05
+        freshness_observations = observations
+        for _ in range(args.freshness_steps):
+            freshness_observations, _, _, _, _ = env.step(freshness_action)
+        freshness_policy = freshness_observations["policy"]
+        active_differences = {
+            key: float(
+                torch.mean(
+                    torch.abs(
+                        freshness_policy[key].float() - main_camera_tensors[key].float()
+                    )
+                ).item()
+            )
+            for key in CAMERA_KEYS
+        }
+        freshness_png_paths = {}
+        for key in CAMERA_KEYS:
+            path = output_dir / f"freshness_{key}.png"
+            Image.fromarray(freshness_policy[key][0].detach().cpu().numpy()).save(path)
+            freshness_png_paths[key] = str(path)
         result.update(
             {
                 "sim_dt_s": float(base_env.physics_dt),
@@ -129,6 +155,10 @@ def main() -> None:
                 "policy_observation_keys": sorted(policy),
                 "camera_summaries": {key: _summary(policy[key]) for key in CAMERA_KEYS},
                 "reset_to_step_mean_abs_pixel_difference": reset_differences,
+                "active_freshness_mean_abs_pixel_difference": active_differences,
+                "freshness_action_env_order": freshness_action.detach().cpu().tolist(),
+                "freshness_steps": args.freshness_steps,
+                "freshness_png_files": freshness_png_paths,
                 "qpos_summary": _summary(qpos),
                 "qpos_order": qpos_names,
                 "qpos_values": qpos_array.tolist(),
@@ -155,6 +185,14 @@ def main() -> None:
             "qpos_names_14": len(qpos_names) == 14,
             "npz_written": package_path.is_file(),
             "pngs_written": all(Path(path).is_file() for path in png_paths.values()),
+            "active_wrist_frames_changed": (
+                active_differences["left_hand_rgb"] > 0.1
+                and active_differences["right_hand_rgb"] > 0.1
+            ),
+            "active_head_frame_changed": active_differences["head_rgb"] > 0.01,
+            "freshness_pngs_written": all(
+                Path(path).is_file() for path in freshness_png_paths.values()
+            ),
         }
         result["checks"] = checks
         result["status"] = "PASS" if all(checks.values()) else "FAIL"
