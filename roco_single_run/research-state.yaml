@@ -95,9 +95,15 @@ hypotheses:
     priority: high
   - id: H13
     statement: "Restoring the historical 200 N R1 gripper effort limit overcomes reducer-release contact load without disturbing the seated stack."
-    status: active
+    status: refuted
     motivation: "At 40 mm clearance the ring remains seated but the gripper closes under a 100 N cap; the earlier official R1 actuator configuration used a 200 N effort limit."
     parent: H12
+    priority: high
+  - id: H14
+    statement: "A reducer-only 7 mm close target lowers grasp preload enough to preserve pickup while permitting physical release above the seated stack."
+    status: active
+    motivation: "Doubling the global effort cap regressed the whole trajectory, while the reducer is squeezed to about 6.8 mm by a zero-position command; the reducer pickup branch can be isolated without changing earlier grasps."
+    parent: H13
     priority: high
 
 experiments:
@@ -105,13 +111,13 @@ experiments:
   baseline_value: null
   best_value: null
   total_runs: 0
-  diagnostic_runs: 13
+  diagnostic_runs: 14
   trajectory: []
 
 outer_loop:
-  cycle: 9
-  last_direction: "R1 gripper release authority"
-  last_reflection: "A clean 40 mm run keeps the ring at its seated height but the 100 N gripper closes further and drags the stack laterally. Restore only the historical 200 N R1 gripper effort cap while holding clearance and timing fixed."
+  cycle: 10
+  last_direction: "Reducer-only grasp preload"
+  last_reflection: "The clean 200 N run regressed to best score 3 and terminal score 1, so global actuator authority is not the release mechanism. Restore 100 N and reduce only the reducer close target to 7 mm, just above its observed 6.8 mm clamped position."
 
 workspace:
   findings: "findings.md"

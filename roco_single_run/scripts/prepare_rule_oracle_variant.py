@@ -67,6 +67,13 @@ R1_GRIPPER_EFFORT_200 = """            "r1_grippers": ImplicitActuatorCfg(
                 friction=0.2,
                 armature=0.2,
             ),"""
+OFFICIAL_GRASP_TARGET = """            action = torch.tensor([[0.0]], device=self.sim.device)
+            joint_ids = gripper_joint_ids"""
+GENTLE_REDUCER_GRASP_TARGET = """            if gear_id == 6:
+                action = torch.tensor([[0.007]], device=self.sim.device)
+            else:
+                action = torch.tensor([[0.0]], device=self.sim.device)
+            joint_ids = gripper_joint_ids"""
 
 
 def _git_head(checkout: Path) -> str:
@@ -100,6 +107,13 @@ def main() -> None:
         type=float,
         choices=(100.0, 200.0),
         default=100.0,
+    )
+    parser.add_argument(
+        "--reducer-grasp-target-m",
+        type=float,
+        choices=(0.0, 0.007),
+        default=0.0,
+        help="Reducer-only close target; all other grasps remain at 0 m.",
     )
     args = parser.parse_args()
 
@@ -171,6 +185,31 @@ def main() -> None:
         source = source.replace(release_replacement, release_target)
         status = "patched"
 
+    grasp_variants = {
+        0.0: OFFICIAL_GRASP_TARGET,
+        0.007: GENTLE_REDUCER_GRASP_TARGET,
+    }
+    grasp_counts = {
+        target_value: source.count(fragment)
+        for target_value, fragment in grasp_variants.items()
+    }
+    if sum(grasp_counts.values()) != 1 or any(
+        count not in (0, 1) for count in grasp_counts.values()
+    ):
+        raise RuntimeError(
+            "Unexpected reducer grasp-target source layout: "
+            + ", ".join(
+                f"{target_value:.3f}={count}"
+                for target_value, count in grasp_counts.items()
+            )
+        )
+    grasp_target = grasp_variants[args.reducer_grasp_target_m]
+    if source.count(grasp_target) != 1:
+        for grasp_fragment in grasp_variants.values():
+            if grasp_fragment != grasp_target:
+                source = source.replace(grasp_fragment, grasp_target)
+        status = "patched"
+
     policy_path.write_text(source, encoding="utf-8")
 
     robots_path = policy_path.with_name("galaxea_robots.py")
@@ -204,6 +243,7 @@ def main() -> None:
         "ring_rotation_deg": args.ring_rotation_deg,
         "reducer_mount_height_m": args.reducer_mount_height_m,
         "reducer_release_duration_s": args.reducer_release_duration_s,
+        "reducer_grasp_target_m": args.reducer_grasp_target_m,
         "status": status,
     }
     print(json.dumps(result, indent=2, sort_keys=True))

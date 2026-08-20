@@ -166,6 +166,16 @@
 - **Hypothesis:** Restoring the earlier official R1 200 N gripper effort limit gives the release enough authority; the current 100 N cap saturates under contact/friction.
 - **Evidence:** Current `GALAXEA_R1_CFG` uses `effort_limit_sim=100.0`; the pre-December R1 configuration used an explicit 200 N gripper effort limit. Velocity limit is not the observed bottleneck because motion is in the wrong direction.
 - **Experiment:** Keep zero ring rotation, 40 mm reducer clearance, and 1.5 s release; change only R1 gripper effort limit 100 -> 200 N. Stiffness, damping, velocity, friction, armature, and all motion stay fixed.
+- **Result:** Refuted — the clean 200 N run completed all 3,420 physics steps but regressed from best/terminal scores 5/4 to 3/1 and disturbed the already-working early assembly phases.
+- **Fix:** Restore the 100 N configuration. Test reducer-only grasp preload rather than changing global gripper dynamics.
+- **Regression status:** FAIL for H13. Result SHA-256 `be30d19d9d51e2484952f34d69516d05d88e4929754a16f839e0025dd0f1e53a`.
+
+## ISSUE-018 — Reducer zero-target grasp may create unnecessary preload
+
+- **Symptom:** At 100 N the reducer is held near 0.0068 m by a 0 m close target and the fingers move inward, not outward, during the 0.04 m release command.
+- **Hypothesis:** A reducer-only 0.007 m close target supplies enough geometric retention for transport without storing the squeeze/contact load that prevents release.
+- **Evidence:** The reducer's observed clamped position is about 6.8 mm. The shared controller source currently commands 0 m for every object's close phase, but `gear_id == 6` can be isolated without touching pins or ring.
+- **Experiment:** Keep the best clearance trajectory and 100 N actuator configuration; change only the reducer close target from 0 to 0.007 m.
 - **Result:** Pending.
-- **Fix:** Pending Stage B iteration 8.
+- **Fix:** Pending Stage B iteration 9.
 - **Regression status:** OPEN.

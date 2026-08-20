@@ -108,3 +108,15 @@ Status: **CLEAN FAIL at 5/6; H12 clearance mechanism supported only**.
 - Console SHA-256: `9ca2080882b20fd278e9d0e4e23da1218732cdc9a29d8d29f2cee69c6eb6b150`.
 
 The 40 mm clearance is retained for the next actuation-authority test; Stage B remains failed.
+
+## Iteration 8 — historical 200 N gripper effort
+
+Status: **CLEAN REGRESSION to 3/6; H13 refuted**.
+
+- The full 3,420-step schedule completed without renderer, physics, asset, NaN, or Python errors.
+- Best score was 3 and last pre-reset reward was 1, versus 5/4 under the otherwise-identical 100 N configuration.
+- Because the global actuator change damaged earlier successful assembly phases, it does not isolate or repair reducer release.
+- Result SHA-256: `be30d19d9d51e2484952f34d69516d05d88e4929754a16f839e0025dd0f1e53a`.
+- Console SHA-256: `bcca270f080cb4a99d4ba4b1e4dca860c833500baf5064288be4a580b9693c78`.
+
+The 200 N cap is rejected. The next test restores 100 N and changes only reducer grasp preload.
