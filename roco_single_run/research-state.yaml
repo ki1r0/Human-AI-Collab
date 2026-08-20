@@ -125,7 +125,7 @@ hypotheses:
     priority: high
   - id: H18
     statement: "The separately published yjsm1203/roco_model_act base checkpoint is architecture-compatible and can produce a broader full-task learned rollout than roco_model_act_2."
-    status: policy_gate_passed_testing_seed_23
+    status: seed_23_failed_testing_seed_17
     motivation: "Its direct model card describes training on all filtered gearbox episodes and phases after pin insertion, whereas _2 repeated a left-only first subtask over four seeds."
     parent: H17
     priority: high
@@ -134,7 +134,7 @@ experiments:
   proxy_metric: "Highest official environment assembly score in a live learned-policy rollout; target score >= 6 with fresh observations at every step."
   baseline_value: 1
   best_value: 1
-  total_runs: 4
+  total_runs: 5
   diagnostic_runs: 26
   trajectory:
     - run: 1
@@ -169,11 +169,19 @@ experiments:
       status: FAIL
       termination: max_steps
       checkpoint: roco_model_act_2
+    - run: 5
+      seed: 23
+      steps: 590
+      best_score: 0
+      final_score: 0
+      status: FAIL
+      termination: max_steps
+      checkpoint: roco_model_act
 
 outer_loop:
-  cycle: 22
-  last_direction: "Relaunch preregistered base-candidate seed 23 with the resolved vendored ACT package path"
-  last_reflection: "The first launch stopped before model construction because PYTHONPATH named the checkout's nonexistent top-level VLA/ACT directory. Preserve the ERROR log, change only PYTHONPATH to the located vendored package parent, and relaunch in a fresh directory; this produced no learned sample and does not count in the seed sequence."
+  cycle: 23
+  last_direction: "Fixed-sequence base-candidate seed-17 sensitivity rollout"
+  last_reflection: "Base seed 23 completed cleanly but scored 0 and was again strongly unilateral: left-arm action standard deviations reached 0.015-0.109 while right-arm joints were only 0.0013-0.0049. Visual audit showed an unsuccessful left approach and a static right arm. Continue the locked seed order without tuning to test the remaining layout-sensitivity explanation."
 
 workspace:
   findings: "findings.md"

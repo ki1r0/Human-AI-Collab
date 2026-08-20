@@ -110,9 +110,6 @@ Evidence under ignored run directory `runs/policy_probe_base/`:
 - `console.log` SHA-256
   `f79b6a5e26040612c13ac8468a8fad769a684b64981fa4f28711f15fbb4473c4`.
 
-Next locked run: base candidate seed 23 under the unchanged 590-step live
-closed-loop contract.
-
 The first launch attempt stopped before model construction because its
 container `PYTHONPATH` named a nonexistent checkout-level ACT directory. No
 policy inference or environment step occurred. The preserved ERROR console is
@@ -120,3 +117,22 @@ policy inference or environment step occurred. The preserved ERROR console is
 `842816767871a2ad7ecb02b5f71665e82ad48dcba9bf98cdfe955df84b54d516`).
 The relaunch changes only that path to the located vendored ACT package parent
 and therefore remains the preregistered seed-23 run.
+
+### Base candidate seed 23
+
+Status: **FAIL** (`max_steps`, best/final score 0/0).
+
+- Completed 590 fresh-observation inferences and live actions with exact
+  checkpoint/stats hashes, strict load, finite arrays, and no native done.
+- All three camera hashes were unique across all 590 policy inputs.
+- Left-arm action standard deviations were 0.015-0.109, while right-arm joints
+  were only 0.0013-0.0049 and the right gripper was 0.000075. Visual audit
+  confirmed an unsuccessful left-arm approach and essentially static right arm.
+- Independent decode verified H.264/yuv420p, 960x270, 20 fps, 591 frames, and
+  29.55 s. No simulator/GPU traceback or error was present; the broad search
+  matched only the expected missing-display warning.
+- Evidence hashes: result `9a51badd...4d61a`, trace
+  `2908870b...56e1d`, video `82c4d38a...f0a5`, console
+  `28ca8311...2aa`, and audited contact sheet `04094191...9041`.
+
+Next locked run: base candidate seed 17, unchanged policy and runner.
