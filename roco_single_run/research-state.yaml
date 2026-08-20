@@ -141,7 +141,7 @@ experiments:
   baseline_value: 1
   best_value: 1
   total_runs: 9
-  diagnostic_runs: 28
+  diagnostic_runs: 29
   trajectory:
     - run: 1
       seed: 23
@@ -217,9 +217,9 @@ experiments:
       checkpoint: roco_model_act_1_epoch_2800
 
 outer_loop:
-  cycle: 31
-  last_direction: "Fresh one-command smoke rerun with portable evidence aliases and host-resolved Git provenance"
-  last_reflection: "The advertised wrapper completed preparation, launch, one live ACT step, evidence generation, and shutdown, but this workspace rejected post-run hard links and the container lacks Git. Preserve the failed wrapper evidence, use relative symlinks for aliases, pass the host-resolved integration commit explicitly, and rerun in a fresh directory."
+  cycle: 32
+  last_direction: "Evidence-backed PARTIAL handoff"
+  last_reflection: "The corrected advertised wrapper exited 0 after a fresh prepare-launch-live-inference-action-evidence-shutdown cycle. It recorded host commit and runtime versions, all non-success integrity checks passed, aliases resolve, video independently decodes, and no container remains. Local engineering work is complete; task success remains blocked only by the lack of a capable public ACT checkpoint."
 
 workspace:
   findings: "findings.md"

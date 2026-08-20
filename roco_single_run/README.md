@@ -83,3 +83,5 @@ See:
 
 Primary evidence is summarized in `experiments/stage-f-learned/result.md`;
 large videos and traces remain in ignored `runs/` directories.
+The one-command regression is under `runs/launcher_smoke_seed23/` (one-step
+infrastructure smoke only, not a task-success trial).

@@ -33,6 +33,9 @@ but none completes the task.
   seed-23 live episode scored 0 and again kept the right arm near reset.
 - Nine learned episodes total have complete fresh-camera/action/state traces,
   independently decodable 591-frame H.264 video, and clean shutdown evidence.
+- The advertised host wrapper passed a fresh prepare/launch/live ACT
+  inference/action/evidence/shutdown regression and records Git/runtime/GPU
+  provenance plus conventional manifest/log/metrics/video/trace aliases.
 
 ## Patterns and Insights
 

@@ -345,6 +345,8 @@
 - **Experiment:** Preserve attempt 1, replace aliases with relative symlinks,
   resolve the commit on the host, pass it as a runner argument, and rerun in a
   fresh directory.
-- **Result:** Pending fresh wrapper regression.
+- **Result:** The fresh rerun exited 0; all five aliases resolve, the manifest
+  records integration commit `1d95b82...b38ec`, all non-success integrity checks
+  pass, the two-frame video independently decodes, and no container remains.
 - **Fix:** Relative symlink aliases and explicit host provenance.
-- **Regression status:** PENDING.
+- **Regression status:** PASS.
