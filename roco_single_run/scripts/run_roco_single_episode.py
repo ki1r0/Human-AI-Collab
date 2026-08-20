@@ -34,6 +34,7 @@ parser.add_argument(
 parser.add_argument("--candidate-id", default="yjsm1203/roco_model_act_2")
 parser.add_argument("--candidate-revision", default="52344a203e0739638cb2c7b11ea632e7b2eb2608")
 parser.add_argument("--seed-sequence", default="23,17,42,2026")
+parser.add_argument("--integration-git-commit", default=None)
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 
@@ -155,7 +156,8 @@ def main() -> None:
         "expected_checkpoint_sha256": args.expected_checkpoint_sha256,
         "expected_stats_sha256": args.expected_stats_sha256,
         "container_image": CONTAINER_IMAGE,
-        "integration_git_commit": git_head(Path(__file__).resolve().parents[2]),
+        "integration_git_commit": args.integration_git_commit
+        or git_head(Path(__file__).resolve().parents[2]),
         "official_source_commit": SOURCE_COMMIT,
         "runner_sha256": file_sha256(Path(__file__)),
         "python_version": platform.python_version(),

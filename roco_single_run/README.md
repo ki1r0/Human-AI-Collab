@@ -34,7 +34,7 @@ three-camera H.264 video plus complete trace/result/console evidence under a new
 a technically valid task failure; inspect `result.json` and require
 `status=PASS`, `task_success=true`, and `best_score>=6` for task success.
 The wrapper also supplies the conventional `run_manifest.json`, `metrics.json`,
-`run.log`, `video.mp4`, and `action_trace.npz` names as hard links to the
+`run.log`, `video.mp4`, and `action_trace.npz` names as relative symlinks to the
 canonical artifacts.
 
 Useful deterministic overrides are environment variables:

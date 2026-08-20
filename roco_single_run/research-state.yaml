@@ -141,7 +141,7 @@ experiments:
   baseline_value: 1
   best_value: 1
   total_runs: 9
-  diagnostic_runs: 27
+  diagnostic_runs: 28
   trajectory:
     - run: 1
       seed: 23
@@ -217,9 +217,9 @@ experiments:
       checkpoint: roco_model_act_1_epoch_2800
 
 outer_loop:
-  cycle: 30
-  last_direction: "Final regression, evidence, documentation, and honest PARTIAL audit"
-  last_reflection: "Terminal _1 epoch seed 23 completed cleanly at score 0 and reproduced the same near-static right arm despite numerically distinct weights. Object-layout fallback seeds cannot supply a missing policy phase. The official source publishes no ACT checkpoint/stats and replacing ACT is outside the fidelity contract; finish all local regression/documentation work and report the capable-checkpoint blocker without manufacturing success."
+  cycle: 31
+  last_direction: "Fresh one-command smoke rerun with portable evidence aliases and host-resolved Git provenance"
+  last_reflection: "The advertised wrapper completed preparation, launch, one live ACT step, evidence generation, and shutdown, but this workspace rejected post-run hard links and the container lacks Git. Preserve the failed wrapper evidence, use relative symlinks for aliases, pass the host-resolved integration commit explicitly, and rerun in a fresh directory."
 
 workspace:
   findings: "findings.md"

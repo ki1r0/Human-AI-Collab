@@ -15,6 +15,7 @@ stats_sha256="${ROCO_STATS_SHA256:-4627d5316f8d6a29915124ea198cf16f82d82b5ea98d5
 candidate_id="${ROCO_CANDIDATE_ID:-yjsm1203/roco_model_act_2}"
 candidate_revision="${ROCO_CANDIDATE_REVISION:-52344a203e0739638cb2c7b11ea632e7b2eb2608}"
 seed_sequence="${ROCO_SEED_SEQUENCE:-23,17,42,2026}"
+integration_git_commit="$(git -C "${workspace_dir}" rev-parse HEAD)"
 run_id="$(date -u +%Y%m%dT%H%M%SZ)_seed${seed}_$$"
 output_dir="${ROCO_OUTPUT_DIR:-${script_dir}/runs/${run_id}}"
 
@@ -60,14 +61,15 @@ docker run --rm \
     --candidate-id "${candidate_id}" \
     --candidate-revision "${candidate_revision}" \
     --seed-sequence "${seed_sequence}" \
+    --integration-git-commit "${integration_git_commit}" \
     --seed "${seed}" \
     --output-dir "${output_dir}" \
     "$@" 2>&1 | tee "${output_dir}/run.log"
 
-# Conventional mission filenames are hard links to the canonical artifacts;
-# the large video and trace are not duplicated.
-ln "${output_dir}/result.json" "${output_dir}/run_manifest.json"
-ln "${output_dir}/result.json" "${output_dir}/metrics.json"
-ln "${output_dir}/run.log" "${output_dir}/console.log"
-ln "${output_dir}/episode.mp4" "${output_dir}/video.mp4"
-ln "${output_dir}/trace.npz" "${output_dir}/action_trace.npz"
+# Conventional mission filenames are relative symlinks to the canonical
+# artifacts; the large video and trace are not duplicated.
+ln -s result.json "${output_dir}/run_manifest.json"
+ln -s result.json "${output_dir}/metrics.json"
+ln -s run.log "${output_dir}/console.log"
+ln -s episode.mp4 "${output_dir}/video.mp4"
+ln -s trace.npz "${output_dir}/action_trace.npz"

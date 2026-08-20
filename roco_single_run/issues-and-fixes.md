@@ -331,3 +331,20 @@
   object teleports are outside the requested ACT fidelity contract.
 - **Regression status:** BLOCKER for learned task success; pipeline integrity
   remains PASS and overall reproduction status is PARTIAL.
+
+## ISSUE-028 — Wrapper evidence hard links are rejected
+
+- **Symptom:** The new one-command smoke completed a live ACT step and shutdown,
+  then `ln` returned `Operation not permitted`; container-side Git lookup also
+  returned unavailable.
+- **Hypothesis:** The workspace mount supports files/symlinks but not hard links,
+  and the runtime container does not ship the Git executable.
+- **Evidence:** Canonical result/log/trace/video exist and are valid; failure
+  occurs only at the first post-run hard-link command. The result contains
+  `integration_git_commit=unavailable`.
+- **Experiment:** Preserve attempt 1, replace aliases with relative symlinks,
+  resolve the commit on the host, pass it as a runner argument, and rerun in a
+  fresh directory.
+- **Result:** Pending fresh wrapper regression.
+- **Fix:** Relative symlink aliases and explicit host provenance.
+- **Regression status:** PENDING.
