@@ -44,3 +44,16 @@ Status: **FAIL; H7 refuted**.
 | 42 | 2 | 0 | 0.9016 m to 1.0991 m | `073c0cfb500a0aaef3599b706bc262680e3aeef24b483df55f81b6239f6fac16` |
 
 All three runs terminated cleanly at the 3,320-step official schedule without timeout or task success. Saved head and wrist RGB frames plus state snapshots prove that every ring was grasped, lifted, transported, and descended over the carrier. Seed 23 entered ring descent with three mounted pin gears, briefly reached score 4, then fell to zero during the commanded 30-degree rotation. Randomization affects early pin success but is not sufficient to resolve assembly.
+
+## Iteration 3 — minimum-legal contact margin
+
+Status: **FAIL; H8 refuted**.
+
+- The 1 micrometre compatibility margins passed a fresh strict Stage A health regression.
+- Seed 23 completed cleanly but regressed from best score 4 to 3.
+- Only two pin relations survived before the ring, versus three with the selected 0.1/1.0 mm contact offsets.
+- Ring descent raised score 2 to 3 at step 2,520; the 30-degree rotation reduced it to 1 by step 2,820.
+- Stage A result SHA-256: `0783b83f584aebdfdad60f1e209cfc541d104293f63a6d4947ebdeeb54cb4263`.
+- Stage B result SHA-256: `c2d52896be0255e79cdcf0d72daa7cebe76759924ab3d99f17e3728539f66bdb`.
+
+The minimum margins are rejected and not retained. The original legal compatibility offsets remain the best-tested physics configuration.

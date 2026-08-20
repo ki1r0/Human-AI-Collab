@@ -116,6 +116,16 @@
 - **Hypothesis:** The added carrier envelope initiates ring/stack contact before the intended seated pose and contributes to the destructive insertion rotation.
 - **Evidence:** Upstream commit `8f57e9b` deliberately changed gear rest offsets to -0.5 mm so surfaces could overlap and slide onto pins. PhysX requires a positive contact offset greater than rest offset; only a positive epsilon is needed for the negative-rest gears, and the carrier needs only an epsilon above its 0.5 mm rest offset.
 - **Experiment:** Preregistered Stage B iteration 3 reduces the compatibility margin to 1 micrometre: gear/reducer contact offset 0.000001 m and carrier contact offset 0.000501 m, with rest offsets unchanged.
+- **Result:** Refuted — the minimum-margin Stage A regression passed cleanly, but seed 23 regressed from best score 4 to 3 and mounted only two pin gears. Ring descent still added one point and rotation still removed a pin relation.
+- **Fix:** Restore the better-performing legal offsets: 0.1 mm contact with -0.5 mm rest for ring/sun/reducer, and 1.0/0.5 mm contact/rest for the carrier.
+- **Regression status:** FAIL for H8. Stage A result SHA-256 `0783b83f584aebdfdad60f1e209cfc541d104293f63a6d4947ebdeeb54cb4263`; Stage B result SHA-256 `c2d52896be0255e79cdcf0d72daa7cebe76759924ab3d99f17e3728539f66bdb`.
+
+## ISSUE-013 — Ring rotation destroys already-scored assembly relations
+
+- **Symptom:** With both tested legal contact margins, score increases at ring descent and then decreases during the commanded 30-degree wrist rotation.
+- **Hypothesis:** Rotation is unnecessary once the ring/carrier relationship scores and mechanically pushes the partially seated pin gears out of tolerance.
+- **Evidence:** Baseline seed 23 scores 3 before the ring and 4 at step 2,520, then 0 at step 2,820. The minimum-margin run scores 2, then 3, then 1 at the same boundaries. Ring pose changes by roughly 25–30 degrees during that interval.
+- **Experiment:** Restore the selected collision offsets and change only the ring case from 30 degrees to 0 degrees while preserving the full 3-second hold, descent, release, and subsequent official phases.
 - **Result:** Pending.
-- **Fix:** Pending Stage A health regression and seed-23 oracle result.
+- **Fix:** Pending Stage B iteration 4.
 - **Regression status:** OPEN.

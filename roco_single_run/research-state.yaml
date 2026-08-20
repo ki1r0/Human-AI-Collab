@@ -65,9 +65,15 @@ hypotheses:
     priority: high
   - id: H8
     statement: "Reducing the compatibility-only contact-offset inflation to a 1 micrometre legal epsilon lets the ring seat without destroying the three carrier-pin placements."
-    status: active
+    status: refuted
     motivation: "The source deliberately uses zero contact offset for tight insertion, while the first compatibility patch added up to 0.5 mm of extra carrier contact envelope beyond the minimum PhysX 5.1 constraint."
     parent: H6
+    priority: high
+  - id: H9
+    statement: "Holding the ring wrist orientation fixed after descent preserves the scored pin placements and lets the remaining official phases reach score 6."
+    status: active
+    motivation: "Both contact-offset regimes gain a ring-related point at descent and lose pin relations only during the subsequent 30-degree wrist rotation."
+    parent: H8
     priority: high
 
 experiments:
@@ -75,13 +81,13 @@ experiments:
   baseline_value: null
   best_value: null
   total_runs: 0
-  diagnostic_runs: 7
+  diagnostic_runs: 9
   trajectory: []
 
 outer_loop:
-  cycle: 4
-  last_direction: "minimum-legal collision contact margin"
-  last_reflection: "Seeds 17/23/42 all grasped, lifted, and centered the ring, but none exceeded score 4; seed 23 lost three scored pin placements during ring rotation. The grasp is viable, so isolate the compatibility-inflated collision envelope before changing the official trajectory."
+  cycle: 5
+  last_direction: "zero ring insertion rotation"
+  last_reflection: "The 1 micrometre contact-margin variant passed Stage A but regressed seed 23 from best score 4 to 3 and still lost a pin relation during ring rotation. Restore the better legal margins and isolate the rotation, since descent itself adds a score point in both regimes."
 
 workspace:
   findings: "findings.md"

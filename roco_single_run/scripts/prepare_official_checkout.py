@@ -54,11 +54,11 @@ def _patch_collision_offsets(path: Path) -> dict:
     )
     negative_previous = (
         "collision_props=sim_utils.CollisionPropertiesCfg("
-        "contact_offset=0.0001, rest_offset=-0.0005)"
+        "contact_offset=0.000001, rest_offset=-0.0005)"
     )
     negative_patched = (
         "collision_props=sim_utils.CollisionPropertiesCfg("
-        "contact_offset=0.000001, rest_offset=-0.0005)"
+        "contact_offset=0.0001, rest_offset=-0.0005)"
     )
     carrier_original = (
         "collision_props=sim_utils.CollisionPropertiesCfg("
@@ -66,11 +66,11 @@ def _patch_collision_offsets(path: Path) -> dict:
     )
     carrier_previous = (
         "collision_props=sim_utils.CollisionPropertiesCfg("
-        "contact_offset=0.001, rest_offset=0.0005)"
+        "contact_offset=0.000501, rest_offset=0.0005)"
     )
     carrier_patched = (
         "collision_props=sim_utils.CollisionPropertiesCfg("
-        "contact_offset=0.000501, rest_offset=0.0005)"
+        "contact_offset=0.001, rest_offset=0.0005)"
     )
 
     def active_count(fragment: str) -> int:
@@ -111,9 +111,10 @@ def _patch_collision_offsets(path: Path) -> dict:
     return {
         "negative_rest_assets_patched": negative_original_count,
         "carrier_assets_patched": carrier_original_count,
-        "negative_rest_contact_offset_m": 0.000001,
-        "carrier_contact_offset_m": 0.000501,
-        "legal_epsilon_above_zero_or_rest_m": 0.000001,
+        "negative_rest_contact_offset_m": 0.0001,
+        "carrier_contact_offset_m": 0.001,
+        "negative_rest_contact_margin_m": 0.0006,
+        "carrier_contact_margin_m": 0.0005,
     }
 
 
