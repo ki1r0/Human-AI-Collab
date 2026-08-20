@@ -110,33 +110,38 @@ def main() -> None:
             }
         )
 
-        snapshot_physics_steps = {
-            int(value.item())
-            for phase_name in ("count_step_11", "count_step_12")
-            for value in getattr(base_env.rule_policy, phase_name)
-        }
+        snapshot_physics_steps = {}
+        for phase_name in ("count_step_11", "count_step_12", "count_step_13", "count_step_14"):
+            for boundary_index, value in enumerate(getattr(base_env.rule_policy, phase_name)):
+                snapshot_physics_steps.setdefault(int(value.item()), []).append(
+                    f"{phase_name}[{boundary_index}]"
+                )
+        snapshot_physics_steps.setdefault(total_policy_steps - 5, []).append("pre_schedule_end")
 
         best_score = int(initial_score)
         last_transition_score = int(initial_score)
         final_terminated = False
         final_truncated = False
+        last_reward_score = int(initial_score)
         steps_completed = 0
         for step_index in range(args.max_steps):
             with torch.inference_mode():
                 observations, reward, terminated, truncated, _ = env.step(zero_action)
             steps_completed = step_index + 1
             score = int(torch.as_tensor(reward).detach().cpu().flatten()[0].item())
+            last_reward_score = score
             best_score = max(best_score, score)
             final_terminated = _as_bool(terminated)
             final_truncated = _as_bool(truncated)
             policy_count = int(base_env.rule_policy.count)
 
-            if score > last_transition_score:
+            if score != last_transition_score:
                 result["score_transitions"].append(
                     {
                         "env_step": steps_completed,
                         "physics_step": policy_count,
                         "score": score,
+                        "previous_score": last_transition_score,
                         "object_poses": _object_poses(base_env),
                     }
                 )
@@ -145,6 +150,7 @@ def main() -> None:
                 snapshot = {
                     "env_step": steps_completed,
                     "physics_step": policy_count,
+                    "phase_boundaries": snapshot_physics_steps[policy_count],
                     "score": score,
                     "ring_arm": base_env.rule_policy.gear_to_pin_map["ring_gear"]["arm"],
                     "ring_pose": _object_poses(base_env)["ring_gear"],
@@ -154,6 +160,7 @@ def main() -> None:
                     "right_gripper_position_m": float(
                         base_env.robot.data.joint_pos[0, base_env._right_gripper_dof_idx[0]].item()
                     ),
+                    "object_poses": _object_poses(base_env),
                 }
                 if args.save_phase_images:
                     snapshot["rgb_files"] = _save_rgb_observations(
@@ -166,7 +173,7 @@ def main() -> None:
                     f"physics_step={policy_count}/{total_policy_steps} score={score}",
                     flush=True,
                 )
-            if score >= 6 or final_terminated or final_truncated:
+            if final_terminated or final_truncated:
                 break
 
         final_score, final_score_time_s = base_env.evaluate_score()
@@ -174,6 +181,7 @@ def main() -> None:
             {
                 "steps_completed": steps_completed,
                 "best_score": best_score,
+                "last_reward_score_before_auto_reset": last_reward_score,
                 "final_score": int(final_score),
                 "final_score_time_s": float(final_score_time_s),
                 "terminated": final_terminated,
@@ -185,6 +193,7 @@ def main() -> None:
         result["checks"] = {
             "r1_bundle": ACTIVE_ROBOT_BUNDLE.name == "r1",
             "official_score_reached_6": best_score >= 6,
+            "stable_score_6_at_schedule_end": last_reward_score >= 6,
             "completed_before_bound": steps_completed <= args.max_steps,
             "not_time_truncated": not final_truncated,
         }

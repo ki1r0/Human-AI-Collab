@@ -126,6 +126,16 @@
 - **Hypothesis:** Rotation is unnecessary once the ring/carrier relationship scores and mechanically pushes the partially seated pin gears out of tolerance.
 - **Evidence:** Baseline seed 23 scores 3 before the ring and 4 at step 2,520, then 0 at step 2,820. The minimum-margin run scores 2, then 3, then 1 at the same boundaries. Ring pose changes by roughly 25–30 degrees during that interval.
 - **Experiment:** Restore the selected collision offsets and change only the ring case from 30 degrees to 0 degrees while preserving the full 3-second hold, descent, release, and subsequent official phases.
+- **Result:** Supported but insufficient — seed 23 preserved all three pin relations, held score 4 after ring release, and improved the run best from 4 to 5. The later reducer descent reduced the score to 2.
+- **Fix:** Retain zero ring rotation in the exploratory repaired-oracle branch; diagnose reducer insertion separately. This is a trajectory deviation and must not be mislabeled as the untouched official expert.
+- **Regression status:** PARTIAL. Result SHA-256 `a3b775b0fdfd72046aac6ddc8f2181b192c60742b869e12037217bf41b606575`.
+
+## ISSUE-014 — Reducer descent destabilizes the four-point assembly
+
+- **Symptom:** With ring rotation removed, the assembly remains at score 4 through ring release, reaches score 5 when the reducer aligns above the center gear, then falls to 2 during reducer descent/release.
+- **Hypothesis:** The official 25 mm reducer mount offset presses the reducer too deeply into the stack under the current collision/runtime regime; a 30 mm endpoint will avoid the destabilizing impulse and still let the part settle.
+- **Evidence:** At score 5 (step 3,180), reducer XY is within 1.7 mm of gear 4 but its center is still about 74 mm higher. The fifth point is therefore a one-sided evaluator artifact, not proof of seating. Score loss occurs later in the 3,220–3,270 release interval.
+- **Experiment:** Retain zero ring rotation and change only reducer `mount_height_offset` from 0.025 m to 0.030 m. Save every reducer phase boundary and every score increase/decrease.
 - **Result:** Pending.
-- **Fix:** Pending Stage B iteration 4.
+- **Fix:** Pending Stage B iteration 5.
 - **Regression status:** OPEN.

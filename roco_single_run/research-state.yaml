@@ -71,9 +71,15 @@ hypotheses:
     priority: high
   - id: H9
     statement: "Holding the ring wrist orientation fixed after descent preserves the scored pin placements and lets the remaining official phases reach score 6."
-    status: active
+    status: supported_but_insufficient
     motivation: "Both contact-offset regimes gain a ring-related point at descent and lose pin relations only during the subsequent 30-degree wrist rotation."
     parent: H8
+    priority: high
+  - id: H10
+    statement: "Raising the reducer mount endpoint by 5 mm avoids destructive contact while allowing the reducer to settle onto the middle gear."
+    status: active
+    motivation: "Zero ring rotation preserves four physical relationships; score reaches 5 during reducer alignment but collapses during its final 25 mm descent/release."
+    parent: H9
     priority: high
 
 experiments:
@@ -81,13 +87,13 @@ experiments:
   baseline_value: null
   best_value: null
   total_runs: 0
-  diagnostic_runs: 9
+  diagnostic_runs: 10
   trajectory: []
 
 outer_loop:
-  cycle: 5
-  last_direction: "zero ring insertion rotation"
-  last_reflection: "The 1 micrometre contact-margin variant passed Stage A but regressed seed 23 from best score 4 to 3 and still lost a pin relation during ring rotation. Restore the better legal margins and isolate the rotation, since descent itself adds a score point in both regimes."
+  cycle: 6
+  last_direction: "shallower reducer mount endpoint"
+  last_reflection: "Zero ring rotation improved best score from 4 to 5 and preserved a stable score 4 through ring release. The reducer aligns above the middle gear, then its final descent/release drops score to 2. Keep the accepted ring change and raise only the reducer endpoint by 5 mm."
 
 workspace:
   findings: "findings.md"

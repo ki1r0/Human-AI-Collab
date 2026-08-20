@@ -57,3 +57,16 @@ Status: **FAIL; H8 refuted**.
 - Stage B result SHA-256: `c2d52896be0255e79cdcf0d72daa7cebe76759924ab3d99f17e3728539f66bdb`.
 
 The minimum margins are rejected and not retained. The original legal compatibility offsets remain the best-tested physics configuration.
+
+## Iteration 4 — zero ring insertion rotation
+
+Status: **FAIL at 5/6; H9 supported but insufficient**.
+
+- The selected contact settings reproduced all three pin relations before ring handling.
+- Ring descent briefly raised score 3 to 4; the zero-rotation hold preserved all pins, and ring release settled to a stable score 4 instead of the official-rotation baseline's score 0.
+- Reducer alignment raised the official score to 5 at step 3,180, but the reducer was still physically high; this is not counted as genuine seating.
+- Final reducer descent/release reduced score to 2 before the schedule reset.
+- Result SHA-256: `a3b775b0fdfd72046aac6ddc8f2181b192c60742b869e12037217bf41b606575`.
+- Console SHA-256: `c0ca1b9a278e3dfd47b2571a4721243e9c651cd68177220ea45f89e4a822688c`.
+
+The exploratory repaired-oracle branch retains zero ring rotation. Stage B remains failed because score never reaches 6 and the reducer physically destabilizes the assembly.
