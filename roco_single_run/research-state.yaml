@@ -107,9 +107,15 @@ hypotheses:
     priority: high
   - id: H15
     statement: "The upstream DataReplayPolicyWrapper can execute a pinned official R1 simulation demonstration through the unchanged live learned-agent action interface with bounded tracking error."
-    status: testing
+    status: refuted_by_preregistered_direction_metric
     motivation: "This isolates absolute-action ordering, controller application, and live stepping before the learned closed-loop rollout."
     parent: H4
+    priority: high
+  - id: H16
+    statement: "A fresh reversible held-target probe passes the unchanged learned-agent action interface with correct mapping, direction, and settling on all 14 channels."
+    status: testing
+    motivation: "The full replay tracked targets closely but its locked per-step residual-direction metric failed; an independent held-target test removes inertial ambiguity without reusing replay outcomes as confirmation."
+    parent: H15
     priority: high
 
 experiments:
@@ -117,13 +123,13 @@ experiments:
   baseline_value: null
   best_value: null
   total_runs: 0
-  diagnostic_runs: 22
+  diagnostic_runs: 23
   trajectory: []
 
 outer_loop:
-  cycle: 14
-  last_direction: "Full official demonstration replay through the live action interface"
-  last_reflection: "Pinned official episode 1 is compact at 590 steps, its actions exactly equal next-step qpos, and the reference repository provides DataReplayPolicyWrapper. Execute the full trajectory without scene tuning and evaluate the preregistered controller-tracking gate."
+  cycle: 15
+  last_direction: "Independent reversible equivalent action-interface probe"
+  last_reflection: "The full official replay completed with 0.010 mean target error but failed its locked direction metric because residual correction and inertial motion were compared at every step. Preserve the FAIL and independently test held reversible targets on a fresh seed before learned rollout."
 
 workspace:
   findings: "findings.md"

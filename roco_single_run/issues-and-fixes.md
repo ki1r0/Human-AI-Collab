@@ -233,7 +233,28 @@
 - **Experiment:** Subclass the reference wrapper locally and add only a
   `torch.device`-backed setter/getter, inheriting its HDF5 loader, action tensor,
   step counter, reset, and `predict()` unchanged.
-- **Result:** Attempt 1 is retained as ERROR; the compatibility replay is pending.
+- **Result:** Attempt 1 is retained as ERROR; the compatibility subclass then
+  loaded the exact 590 actions and completed the full live replay.
 - **Fix:** Use `CompatibleDataReplayPolicyWrapper` only for this upstream API
   mismatch. Do not patch the official checkout or trajectory.
-- **Regression status:** PENDING Stage E rerun.
+- **Regression status:** PASS for wrapper construction/loading; the independent
+  replay gate still failed its separate direction criterion.
+
+## ISSUE-024 — Per-step residual direction metric rejects close tracking
+
+- **Symptom:** Full replay mean absolute command error is only 0.0100 and all
+  trajectories visually/numerically track, yet the locked direction agreement
+  is 0.626 against a 0.80 threshold.
+- **Hypothesis:** Comparing the current residual request to only the next 50 ms
+  displacement counts inertial settling around small targets as wrong-direction
+  motion even when the absolute-position controller is functioning correctly.
+- **Evidence:** On the same failed trace, agreement rises from 0.626 for residuals
+  over 0.001 to 0.806 over 0.002 and 0.906 over 0.01. Actual action-transition
+  direction agreement is 0.976, and all per-joint command/live correlations are
+  0.940–0.998. These are diagnostic post-hoc values, not pass evidence.
+- **Experiment:** Preserve replay FAIL. On fresh seed 42, command bounded positive,
+  return, negative, and return targets for ten steps each, preregistering phase
+  settling error, displacement cosine, and direction thresholds.
+- **Result:** Pending independent equivalent-interface probe.
+- **Fix:** None yet; do not weaken or reinterpret the original replay gate.
+- **Regression status:** PENDING Stage E iteration 2.
