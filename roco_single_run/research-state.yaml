@@ -125,7 +125,7 @@ hypotheses:
     priority: high
   - id: H18
     statement: "The separately published yjsm1203/roco_model_act base checkpoint is architecture-compatible and can produce a broader full-task learned rollout than roco_model_act_2."
-    status: testing_policy_gate
+    status: policy_gate_passed_testing_seed_23
     motivation: "Its direct model card describes training on all filtered gearbox episodes and phases after pin insertion, whereas _2 repeated a left-only first subtask over four seeds."
     parent: H17
     priority: high
@@ -135,7 +135,7 @@ experiments:
   baseline_value: 1
   best_value: 1
   total_runs: 4
-  diagnostic_runs: 24
+  diagnostic_runs: 25
   trajectory:
     - run: 1
       seed: 23
@@ -171,9 +171,9 @@ experiments:
       checkpoint: roco_model_act_2
 
 outer_loop:
-  cycle: 20
-  last_direction: "Strict policy gate for separately pinned yjsm1203/roco_model_act"
-  last_reflection: "The complete _2 sequence scored [1,0,0,0] and reproduced near-static right-arm outputs on every seed, refuting it as a full-task policy. Pin the base candidate by immutable revision/hash, parameterize hash assertions without changing inference math, and require the entire Stage D gate before rollout."
+  cycle: 21
+  last_direction: "Preregistered live seed-23 rollout for strictly gated yjsm1203/roco_model_act"
+  last_reflection: "The independently pinned base candidate passed the full Stage D gate and produced numerically distinct finite actions without any inference-path change. Preserve the locked hash/revision and run seed 23 through the same 590-step live episode contract before drawing behavioral conclusions."
 
 workspace:
   findings: "findings.md"

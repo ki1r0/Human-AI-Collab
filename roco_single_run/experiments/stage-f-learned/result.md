@@ -87,5 +87,28 @@ full-task Task 1 solution under the reproduced contract. The only scored event
 was one genuine left-arm gear placement on seed 23.
 
 The reproduction remains in progress with a separately pinned base ACT
-candidate whose own model card describes broader later assembly phases. It must
-pass a new strict policy-only gate before rollout.
+candidate whose own model card describes broader later assembly phases. Its
+strict policy-only gate is recorded below.
+
+## Alternative base ACT policy gate
+
+Status: **PASS**.
+
+`yjsm1203/roco_model_act@144d1f73e6ed1f80e04dd969235160452cc517fc`
+passed the full Stage D gate against the saved live observation. Its exact
+checkpoint/statistics hashes are `9a4c081f...4953e` and
+`308b4e45...ec1cc`. All 344 tensors (83,923,087 parameters) loaded strictly;
+the raw chunk was finite with shape `(1,100,14)`; training-faithful
+normalization, exact reorder, broad physical bounds, temporal advance/change,
+and reset reproducibility all passed. Its first action was numerically distinct
+from the refuted `_2` checkpoint.
+
+Evidence under ignored run directory `runs/policy_probe_base/`:
+
+- `result.json` SHA-256
+  `5ff91561958dab35f2c06c30ffd3a4d44bc2ef993a1c13ebe91bb6ba3731558b`.
+- `console.log` SHA-256
+  `f79b6a5e26040612c13ac8468a8fad769a684b64981fa4f28711f15fbb4473c4`.
+
+Next locked run: base candidate seed 23 under the unchanged 590-step live
+closed-loop contract.
