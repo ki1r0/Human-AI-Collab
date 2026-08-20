@@ -34,6 +34,14 @@ RAISED_REDUCER_HEIGHT = """        elif gear_id == 6: # Reducer
                 self.current_target_orientation = root_state[:, 3:7].clone()
             obj_height_offset = 0.023 + 0.02
             mount_height_offset = 0.030"""
+OFFICIAL_REDUCER_RELEASE = (
+    "        self.time_step_14 = torch.tensor("
+    "[0.0, 0.5, 0.5, 0.5, 0.5], device=sim.device)"
+)
+EXTENDED_REDUCER_RELEASE = (
+    "        self.time_step_14 = torch.tensor("
+    "[0.0, 0.5, 0.5, 1.5, 0.5], device=sim.device)"
+)
 
 
 def _git_head(checkout: Path) -> str:
@@ -55,6 +63,12 @@ def main() -> None:
         type=float,
         choices=(0.025, 0.030),
         default=0.025,
+    )
+    parser.add_argument(
+        "--reducer-release-duration-s",
+        type=float,
+        choices=(0.5, 1.5),
+        default=0.5,
     )
     args = parser.parse_args()
 
@@ -108,6 +122,27 @@ def main() -> None:
         source = source.replace(height_replacement, height_target)
         status = "patched"
 
+    official_release_count = source.count(OFFICIAL_REDUCER_RELEASE)
+    extended_release_count = source.count(EXTENDED_REDUCER_RELEASE)
+    if (official_release_count, extended_release_count) not in ((1, 0), (0, 1)):
+        raise RuntimeError(
+            "Unexpected reducer release-duration source layout: "
+            f"official={official_release_count}, extended_variant={extended_release_count}"
+        )
+    release_target = (
+        EXTENDED_REDUCER_RELEASE
+        if args.reducer_release_duration_s == 1.5
+        else OFFICIAL_REDUCER_RELEASE
+    )
+    release_replacement = (
+        OFFICIAL_REDUCER_RELEASE
+        if args.reducer_release_duration_s == 1.5
+        else EXTENDED_REDUCER_RELEASE
+    )
+    if source.count(release_target) != 1:
+        source = source.replace(release_replacement, release_target)
+        status = "patched"
+
     policy_path.write_text(source, encoding="utf-8")
 
     result = {
@@ -116,6 +151,7 @@ def main() -> None:
         "policy_path": str(policy_path),
         "ring_rotation_deg": args.ring_rotation_deg,
         "reducer_mount_height_m": args.reducer_mount_height_m,
+        "reducer_release_duration_s": args.reducer_release_duration_s,
         "status": status,
     }
     print(json.dumps(result, indent=2, sort_keys=True))

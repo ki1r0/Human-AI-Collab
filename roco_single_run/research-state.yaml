@@ -77,9 +77,15 @@ hypotheses:
     priority: high
   - id: H10
     statement: "Raising the reducer mount endpoint by 5 mm avoids destructive contact while allowing the reducer to settle onto the middle gear."
-    status: active
+    status: supported_but_insufficient
     motivation: "Zero ring rotation preserves four physical relationships; score reaches 5 during reducer alignment but collapses during its final 25 mm descent/release."
     parent: H9
+    priority: high
+  - id: H11
+    statement: "Extending reducer release from 0.5 s to 1.5 s lets the right gripper clear the part before retreat and preserves the assembled stack."
+    status: active
+    motivation: "At the 0.5 s release boundary the right gripper has moved only from 6.84 mm to 7.17 mm toward a 40 mm command, so the retreat drags the still-grasped reducer and assembly."
+    parent: H10
     priority: high
 
 experiments:
@@ -87,13 +93,13 @@ experiments:
   baseline_value: null
   best_value: null
   total_runs: 0
-  diagnostic_runs: 10
+  diagnostic_runs: 11
   trajectory: []
 
 outer_loop:
-  cycle: 6
-  last_direction: "shallower reducer mount endpoint"
-  last_reflection: "Zero ring rotation improved best score from 4 to 5 and preserved a stable score 4 through ring release. The reducer aligns above the middle gear, then its final descent/release drops score to 2. Keep the accepted ring change and raise only the reducer endpoint by 5 mm."
+  cycle: 7
+  last_direction: "longer reducer gripper release"
+  last_reflection: "The 30 mm endpoint preserves score 5 until late release and ends better than 25 mm, but the gripper opens only 0.33 mm of the required 33 mm before retreat. Retain the endpoint and extend only the release phase to 1.5 s."
 
 workspace:
   findings: "findings.md"

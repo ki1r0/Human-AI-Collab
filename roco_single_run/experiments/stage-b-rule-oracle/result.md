@@ -70,3 +70,16 @@ Status: **FAIL at 5/6; H9 supported but insufficient**.
 - Console SHA-256: `c0ca1b9a278e3dfd47b2571a4721243e9c651cd68177220ea45f89e4a822688c`.
 
 The exploratory repaired-oracle branch retains zero ring rotation. Stage B remains failed because score never reaches 6 and the reducer physically destabilizes the assembly.
+
+## Iteration 5 — 30 mm reducer endpoint
+
+Status: **DIAGNOSTIC FAIL at 5/6; H10 supported but insufficient**.
+
+- Score remained 5 through step 3,250, versus score 2 with the 25 mm endpoint.
+- At release start/end (steps 3,220/3,270), right-gripper position changed only 0.006844 -> 0.007173 m toward the commanded 0.04 m.
+- The next retreat dragged the still-grasped reducer; the 3,315 snapshot score was 3 and the last pre-reset reward was 4.
+- One `omni.syntheticdata` discarded-frame error makes this launch runtime-contaminated and ineligible as a clean validation run.
+- Result SHA-256: `75c261fe87b5274ebcfad875ee98b20318dcd54b87f2bd72b3bf6cdd47dfcf2a`.
+- Console SHA-256: `5e99b45562b89ce9f3b5931ee6681fb6c7a5396f0a5a135965c0d6e9ec914eaf`.
+
+The next test retains the mechanically improved 30 mm endpoint and changes only reducer release duration.

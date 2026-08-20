@@ -136,6 +136,16 @@
 - **Hypothesis:** The official 25 mm reducer mount offset presses the reducer too deeply into the stack under the current collision/runtime regime; a 30 mm endpoint will avoid the destabilizing impulse and still let the part settle.
 - **Evidence:** At score 5 (step 3,180), reducer XY is within 1.7 mm of gear 4 but its center is still about 74 mm higher. The fifth point is therefore a one-sided evaluator artifact, not proof of seating. Score loss occurs later in the 3,220–3,270 release interval.
 - **Experiment:** Retain zero ring rotation and change only reducer `mount_height_offset` from 0.025 m to 0.030 m. Save every reducer phase boundary and every score increase/decrease.
+- **Result:** Supported but insufficient — at 30 mm the run held score 5 through step 3,250 instead of collapsing to 2, but release still disturbed the assembly; last pre-reset reward was 4 and the 3,315 snapshot score was 3.
+- **Fix:** Retain 30 mm for the next exploratory branch and isolate the visibly incomplete gripper release.
+- **Regression status:** PARTIAL. The run had one `omni.syntheticdata` discarded-frame error and is diagnostic only. Result SHA-256 `75c261fe87b5274ebcfad875ee98b20318dcd54b87f2bd72b3bf6cdd47dfcf2a`.
+
+## ISSUE-015 — Reducer release ends while gripper is still closed
+
+- **Symptom:** The arm retreats at step 3,270 while the right gripper remains clamped around the reducer, after which the reducer and stack are displaced.
+- **Hypothesis:** Extending only the reducer open-command phase from 0.5 s to 1.5 s lets the gripper clear the part before retreat.
+- **Evidence:** Right gripper position is 0.006844 m at release start (step 3,220) and only 0.007173 m at the retreat boundary (step 3,270), despite a 0.04 m target. The 3,315 RGB frame visibly shows the retreating closed gripper and disturbed gearbox.
+- **Experiment:** Keep zero ring rotation and the 0.030 m reducer endpoint; change `time_step_14` release duration only from 0.5 s to 1.5 s. Total schedule becomes 3,420 physics steps / 684 environment steps, within the locked 700-step bound.
 - **Result:** Pending.
-- **Fix:** Pending Stage B iteration 5.
+- **Fix:** Pending Stage B iteration 6.
 - **Regression status:** OPEN.
