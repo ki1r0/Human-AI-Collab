@@ -33,3 +33,20 @@ Evidence under ignored run directory `runs/learned_seed23/`:
   `1684a19506b5dcdd67a7590a45563355f585febcf880813643d19f19d0ff0f4c`.
 
 Next locked run: seed 17, unchanged policy and runner.
+
+## Seed 17
+
+Status: **FAIL** (`max_steps`, best/final score 0/0).
+
+- Completed the same 590-inference/590-action contract with fresh live frames,
+  exact model load, finite trace, no done, and no simulator/GPU error.
+- The left arm approached the first gear but did not mount it. Right-arm action
+  standard deviations fell further to 0.0010–0.0048 and right-gripper std was
+  0.000499, again matching a visually static right arm.
+- All three camera hashes were unique at every step. Video verified at H.264,
+  591 frames, 29.55 s.
+- Evidence hashes: result `f11e0ab4...cdbb15`, trace
+  `841f479a...8b6206`, video `bac5a6cf...edcef`, console
+  `806c603f...c4eff`.
+
+Next locked run: seed 42, unchanged policy and runner.
