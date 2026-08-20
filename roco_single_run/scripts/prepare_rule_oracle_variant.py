@@ -185,29 +185,22 @@ def main() -> None:
         source = source.replace(release_replacement, release_target)
         status = "patched"
 
-    grasp_variants = {
-        0.0: OFFICIAL_GRASP_TARGET,
-        0.007: GENTLE_REDUCER_GRASP_TARGET,
-    }
-    grasp_counts = {
-        target_value: source.count(fragment)
-        for target_value, fragment in grasp_variants.items()
-    }
-    if sum(grasp_counts.values()) != 1 or any(
-        count not in (0, 1) for count in grasp_counts.values()
-    ):
+    official_grasp_count = source.count(OFFICIAL_GRASP_TARGET)
+    gentle_grasp_count = source.count(GENTLE_REDUCER_GRASP_TARGET)
+    official_layout = (official_grasp_count, gentle_grasp_count) == (1, 0)
+    gentle_layout = (official_grasp_count, gentle_grasp_count) == (1, 1)
+    if not (official_layout or gentle_layout):
         raise RuntimeError(
             "Unexpected reducer grasp-target source layout: "
-            + ", ".join(
-                f"{target_value:.3f}={count}"
-                for target_value, count in grasp_counts.items()
-            )
+            f"official_fragment={official_grasp_count}, "
+            f"gentle_variant={gentle_grasp_count}"
         )
-    grasp_target = grasp_variants[args.reducer_grasp_target_m]
-    if source.count(grasp_target) != 1:
-        for grasp_fragment in grasp_variants.values():
-            if grasp_fragment != grasp_target:
-                source = source.replace(grasp_fragment, grasp_target)
+    select_gentle_grasp = args.reducer_grasp_target_m == 0.007
+    if select_gentle_grasp and not gentle_layout:
+        source = source.replace(OFFICIAL_GRASP_TARGET, GENTLE_REDUCER_GRASP_TARGET)
+        status = "patched"
+    elif not select_gentle_grasp and not official_layout:
+        source = source.replace(GENTLE_REDUCER_GRASP_TARGET, OFFICIAL_GRASP_TARGET)
         status = "patched"
 
     policy_path.write_text(source, encoding="utf-8")
