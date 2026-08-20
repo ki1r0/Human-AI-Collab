@@ -131,7 +131,7 @@ hypotheses:
     priority: high
   - id: H19
     statement: "The author's remaining roco_model_act_1 repository exposes a provenance-based checkpoint selection that is architecture-compatible and behaviorally distinct enough to justify one final ACT candidate gate."
-    status: terminal_epoch_preregistered_download_pending
+    status: terminal_epoch_hash_verified_testing_policy_gate
     motivation: "Both available policy_best checkpoints are empirically unilateral; _1 is the only remaining same-author public ACT repository, but its epoch files require a selection rule fixed before rollout."
     parent: H18
     priority: high
@@ -209,9 +209,9 @@ experiments:
       checkpoint: roco_model_act
 
 outer_loop:
-  cycle: 27
-  last_direction: "Immutable download, hash verification, and strict policy gate for terminal roco_model_act_1 epoch 2800"
-  last_reflection: "The remaining repository has no best checkpoint but exposes a complete matching stats file and epoch series ending at 2800. Select the terminal/latest artifact before tensor inspection, pin revision/size/LFS hashes, and require the full unchanged policy gate before any simulator rollout."
+  cycle: 28
+  last_direction: "Strict saved-live-observation policy gate for terminal roco_model_act_1 epoch 2800"
+  last_reflection: "The immutable checkpoint/stats downloads exactly match preregistered byte sizes and LFS SHA-256 values; published L1/KL/loss curves are coherent through epoch 2800. Keep checkpoint selection fixed and require the complete unchanged Stage D gate before simulation."
 
 workspace:
   findings: "findings.md"
