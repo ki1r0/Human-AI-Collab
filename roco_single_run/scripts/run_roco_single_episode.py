@@ -5,7 +5,10 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.metadata
 import json
+import platform
+import subprocess
 import time
 from pathlib import Path
 
@@ -52,6 +55,25 @@ from roco_policy import CAMERA_NAMES, RocoActPolicy, file_sha256  # noqa: E402
 
 CONTAINER_IMAGE = "nvcr.io/nvidia/isaac-lab:2.3.0"
 SOURCE_COMMIT = "094a1f76d18c207caec198315f23b1a60dbca94f"
+
+
+def package_version(name: str) -> str:
+    try:
+        return importlib.metadata.version(name)
+    except importlib.metadata.PackageNotFoundError:
+        return "not-installed-as-distribution"
+
+
+def git_head(path: Path) -> str:
+    try:
+        return subprocess.run(
+            ["git", "-C", str(path), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unavailable"
 
 
 def policy_qpos(observations: dict[str, torch.Tensor]) -> torch.Tensor:
@@ -133,13 +155,26 @@ def main() -> None:
         "expected_checkpoint_sha256": args.expected_checkpoint_sha256,
         "expected_stats_sha256": args.expected_stats_sha256,
         "container_image": CONTAINER_IMAGE,
+        "integration_git_commit": git_head(Path(__file__).resolve().parents[2]),
         "official_source_commit": SOURCE_COMMIT,
+        "runner_sha256": file_sha256(Path(__file__)),
+        "python_version": platform.python_version(),
+        "torch_version": torch.__version__,
+        "cuda_runtime_version": torch.version.cuda,
+        "gpu_name": torch.cuda.get_device_name(torch.device(args.device)),
+        "isaac_sim_version": "5.1.0-rc.19",
+        "isaac_lab_distribution_version": package_version("isaaclab"),
         "active_robot_bundle": ACTIVE_ROBOT_BUNDLE.name,
         "checkpoint": str(args.checkpoint.resolve()),
         "stats": str(args.stats.resolve()),
         "max_steps": args.max_steps,
         "video_fps": args.video_fps,
         "policy_inputs": list(CAMERA_NAMES) + ["qpos14"],
+        "raw_camera_shape": [1, 240, 320, 3],
+        "raw_camera_dtype": "uint8",
+        "model_image_shape": [1, 3, 3, 240, 320],
+        "qpos_shape": [1, 14],
+        "policy_action_shape": [1, 14],
         "privileged_inputs_to_policy": False,
         "status": "RUNNING",
     }

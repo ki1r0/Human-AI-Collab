@@ -1,6 +1,7 @@
 # Stage F result — learned closed-loop episodes
 
-Overall status: **IN PROGRESS; no task-success episode yet**.
+Overall status: **FAIL; reproduction remains PARTIAL because no task-success
+episode exists**.
 
 ## Seed 23
 
@@ -211,3 +212,36 @@ console SHA-256
 `4d036070b713a43f6d522ed44ddac63f23256b2dd154779697ff817d0af2e43b`.
 
 Next locked run: terminal `_1` epoch, seed 23, unchanged live runner.
+
+### Terminal `_1` epoch seed 23
+
+Status: **FAIL** (`max_steps`, best/final score 0/0).
+
+- Completed all 590 learned steps with strict model/hash integrity, finite
+  arrays, 590 unique inputs per camera, no done, and clean shutdown.
+- Left-arm action standard deviations were 0.039-0.174, while right-arm joints
+  were only 0.0013-0.0044 and the right gripper was 0.000111. This independently
+  reproduces the unilateral failure rather than a seed-specific layout miss.
+- Independent decode verified 591 H.264 frames over 29.55 s; the error scan
+  matched only the expected missing-display warning.
+- Evidence hashes: result `95170beb...5c3b`, trace
+  `59a29d24...bcce`, video `ccef8d31...6bfc`, console
+  `552e24fa...6c58`.
+
+## Learned-stage conclusion
+
+Status: **FAIL / reproduction remains PARTIAL**.
+
+Nine genuine learned episodes were executed across every public same-author
+RoCo-compatible ACT release: `_2` scored `[1,0,0,0]`, base scored
+`[0,0,0,0]`, and terminal `_1` epoch 2800 scored `[0]`. Every trial used fresh
+live observations, exact paired stats, real strict model inference, complete
+trace/video evidence, and clean shutdown. The repeated near-static right arm is
+a checkpoint behavior, not an observation, action-interface, or simulator
+execution fault.
+
+The organizer repository publishes no ACT weights or matching stats. Replacing
+ACT, splicing policies, mirroring actions, moving objects, or injecting the rule
+oracle would violate the locked fidelity criteria. A capable matching ACT
+checkpoint or new training data/compute is therefore the remaining external
+requirement for score-6 task completion.

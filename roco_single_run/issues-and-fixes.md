@@ -38,7 +38,8 @@
 - **Experiment:** Searched official sources first, then public RoCo-compatible models.
 - **Result:** Found `yjsm1203/roco_model_act_2` with architecture-matching checkpoint and stats, trained on official plus additional data.
 - **Fix:** Use this pinned third-party candidate provisionally and mark checkpoint provenance as APPROXIMATION. Continue searching for an organizer artifact.
-- **Regression status:** OPEN — download, load, and rollout pending.
+- **Regression status:** BLOCKER remains for organizer weights. Three third-party
+  ACT releases were pinned, strictly loaded, and rolled out; none exceeded 1/6.
 
 ## ISSUE-005 — Upstream preprocessing mismatch
 
@@ -47,8 +48,9 @@
 - **Evidence:** `act/utils.py` divides RGB by 255 and standardizes qpos; `imitate_episodes.py` does the same during evaluation.
 - **Experiment:** Static end-to-end data-flow comparison across runner, wrapper, loader, and evaluator.
 - **Result:** Training/eval behavior is consistent; deployment runner is incomplete.
-- **Fix:** Planned adapter applies training-faithful RGB and qpos preprocessing with runtime assertions and logs both raw/normalized ranges.
-- **Regression status:** OPEN — unit and live-observation tests pending.
+- **Fix:** The adapter applies training-faithful RGB and qpos preprocessing with
+  runtime assertions and logs both raw/normalized ranges.
+- **Regression status:** PASS in all policy-only and learned live runs.
 
 ## ISSUE-006 — R1/R1 Lite embodiment drift
 
@@ -58,7 +60,8 @@
 - **Experiment:** Compared current README, bundle history, checkpoint dates, and dataset embodiment metadata.
 - **Result:** R1 is the checkpoint-compatible official embodiment for this rollout.
 - **Fix:** Use the repository-supported one-line R1 bundle selection in the isolated checkout and record the patch.
-- **Regression status:** PARTIAL — Stage A verified the live R1 joint names, indices, camera paths, and reset state; checkpoint range comparison remains pending.
+- **Regression status:** PASS for the selected embodiment contract; all three
+  checkpoint families pass physical-range checks and live R1 execution.
 
 ## ISSUE-007 — Native success termination bug
 
@@ -68,7 +71,8 @@
 - **Experiment:** Static type/value comparison.
 - **Result:** Tuple-to-int equality is always false.
 - **Fix:** Runner will separately read `(score, time_cost)` and declare success only from `score >= 6`; environment timeout remains a termination condition. Upstream code will not be silently rewritten.
-- **Regression status:** OPEN — runtime score test pending.
+- **Regression status:** PASS for explicit score handling. Nine traces recorded
+  per-step score, including a genuine 0→1 transition, without false success.
 
 ## ISSUE-008 — Git LFS attribute warning
 
@@ -78,7 +82,8 @@
 - **Experiment:** Enumerated LFS files and searched for pointer headers.
 - **Result:** All listed runtime USD assets are materialized; warning concerns tracking history/attributes.
 - **Fix:** No content rewrite. Preserve official checkout and validate assets again before launch.
-- **Regression status:** PASS for pointer resolution; Stage A asset loading pending.
+- **Regression status:** PASS for pointer resolution and repeated Stage A/F asset
+  loading.
 
 ## ISSUE-009 — Invalid collision offsets and absent table textures
 
@@ -98,7 +103,8 @@
 - **Experiment:** Restore only the table and external environment to the R1/checkpoint-era 0.20 m workspace and repeat the locked oracle.
 - **Result:** Supported but insufficient — best score improved from 3 to 4 and all three pin gears mounted; ring/carrier still failed.
 - **Fix:** `prepare_official_checkout.py` now asserts/restores 0.20 m for the table, external environment, and agent environment whenever the R1 integration is prepared.
-- **Regression status:** PARTIAL — 0.20 m retained; randomized ring-placement sweep pending.
+- **Regression status:** PARTIAL — 0.20 m retained; the completed randomized
+  sweep did not produce stable score 6.
 
 ## ISSUE-011 — Randomization does not explain ring insertion failure
 
@@ -208,7 +214,7 @@
 - **Experiment:** Put the official checkout's `VLA/ACT` directory on `PYTHONPATH` and import the exact official `act.policy.ACTPolicy` module directly.
 - **Result:** Supported — the direct `act.policy` import reached stats loading without importing any Isaac environment module.
 - **Fix:** Use the direct official ACT subpackage in policy-only and learned-runner processes; environment imports remain after `AppLauncher` in simulator processes.
-- **Regression status:** PASS for import isolation; full Stage D still pending.
+- **Regression status:** PASS through Stage D and all learned runs.
 
 ## ISSUE-022 — Stats pickle uses a NumPy 2 private module name
 
@@ -286,3 +292,42 @@
   temporal history.
 - **Regression status:** REFUTED for `_2` as a full-task policy. Test the base
   candidate independently; do not mix or splice checkpoints.
+
+## ISSUE-026 — Base ACT candidate repeats unilateral behavior across layouts
+
+- **Symptom:** The base `roco_model_act` candidate scores zero on each fixed
+  seed despite its card describing later assembly phases.
+- **Hypothesis:** Its different training data might activate later/right-arm
+  phases after a seed-sensitive left-arm start.
+- **Evidence:** The checkpoint/stats pass the complete Stage D gate and all four
+  live runs have 590 unique inputs per camera, finite actions, full video, and
+  clean shutdown. Right-arm joint standard deviations remain approximately
+  0.001-0.006 while the left arm is visibly active.
+- **Experiment:** Pinned revision/hashes independently, then ran the unchanged
+  590-step contract at seeds 23, 17, 42, and 2026.
+- **Result:** Refuted — best scores are `[0,0,0,0]`; no score transition or
+  right-arm task phase appears.
+- **Fix:** None. Do not splice the base checkpoint with `_2` or manufacture a
+  post-pin start state.
+- **Regression status:** REFUTED for the base checkpoint as a full-task policy.
+
+## ISSUE-027 — No public ACT checkpoint completes Task 1
+
+- **Symptom:** The final public `_1` terminal epoch also completes 590 valid
+  learned steps at score zero with a near-static right arm.
+- **Hypothesis:** A separately trained terminal epoch, selected before tensor or
+  rollout inspection, could be behaviorally broader than both best checkpoints.
+- **Evidence:** Immutable epoch 2800 and its stats match preregistered hashes;
+  all Stage D gates pass; seed-23 left/right joint action standard deviations
+  are 0.039-0.174 versus 0.0013-0.0044. Video, camera freshness, finite arrays,
+  action-interface validation, and shutdown all pass.
+- **Experiment:** Run the unchanged live seed-23 contract with the terminal
+  epoch after strict policy gating.
+- **Result:** Refuted — best/final score 0/0. Across `_2`, base, and `_1`, nine
+  genuine trials score `[1,0,0,0,0,0,0,0,0]`.
+- **Fix:** No faithful local code fix exists. The organizer source publishes no
+  ACT checkpoint or matching stats; a capable checkpoint or new training is
+  required. SmolVLA/RL substitution, action mirroring, oracle splicing, or
+  object teleports are outside the requested ACT fidelity contract.
+- **Regression status:** BLOCKER for learned task success; pipeline integrity
+  remains PASS and overall reproduction status is PARTIAL.

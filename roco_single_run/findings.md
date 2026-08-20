@@ -10,7 +10,10 @@ The relevant benchmark is the AAAI 2026 planetary-gearbox environment, not the n
 
 The official ACT training data flow is internally clear even though the deployment scripts are inconsistent: three RGB views are stacked in `[head_rgb, left_hand_rgb, right_hand_rgb]` order and divided by 255; qpos is standardized with `qpos_mean/qpos_std`; ACT predicts a 100-action normalized chunk; temporal aggregation combines overlapping chunks; actions are denormalized with `action_mean/action_std`; policy order `[left arm, left gripper, right arm, right gripper]` is remapped to environment order `[left arm, right arm, left gripper, right gripper]` before absolute joint-position control.
 
-The public official repository contains no learned checkpoint or normalization statistics. A compatible public candidate exists at `yjsm1203/roco_model_act_2`, including `policy_best.ckpt` and `dataset_stats.pkl`, but it is third-party and trained on the official data plus additional demonstrations. Its task success must be established empirically and its provenance remains a fidelity deviation.
+The public official repository contains no learned checkpoint or normalization
+statistics. Three compatible same-author public ACT releases were pinned and
+tested as explicit third-party approximations. All load and execute faithfully,
+but none completes the task.
 
 ## Key Results
 
@@ -24,6 +27,12 @@ The public official repository contains no learned checkpoint or normalization s
 - Stage D strictly loads the 83,923,087-parameter candidate and paired stats, then passes normalization, chunk, temporal aggregation, denormalization, reorder, and reset checks on a real live observation.
 - The full official DataReplay episode executed all 590 actions but failed its locked residual-direction threshold and scored 0 on a visibly different reset layout. A fresh independently preregistered equivalent-interface probe then passed all 14 channels in both directions with 1.0 direction agreement and about 0.00188 target error.
 - Four genuine closed-loop `roco_model_act_2` episodes completed at scores `[1,0,0,0]`. The seed-23 left arm genuinely mounted one gear, but right-arm action variance stayed tiny and no right-arm task phase appeared on any seed; this candidate is refuted as a full-task solution under the reproduced contract.
+- Four separately pinned base-checkpoint episodes completed at `[0,0,0,0]` and
+  repeated the same unilateral behavior despite distinct weights and stats.
+- A provenance-selected terminal `_1` epoch passed the full policy gate but its
+  seed-23 live episode scored 0 and again kept the right arm near reset.
+- Nine learned episodes total have complete fresh-camera/action/state traces,
+  independently decodable 591-frame H.264 video, and clean shutdown evidence.
 
 ## Patterns and Insights
 
@@ -40,9 +49,15 @@ Several apparent runtime failures can be predicted from source mismatches rather
 
 ## Open Questions
 
-- Can the third-party ACT candidate reach explicit score 6 in one of the fixed learned-rollout seeds without any policy or task tuning?
-- Does its learned visual behavior tolerate the prepared environment's neutral replacement table textures and current PhysX compatibility offsets?
+- Can an organizer/private or newly trained full-task ACT checkpoint reach
+  explicit score 6 under this now-validated execution contract?
+- Is the repeated unilateral behavior primarily training-phase coverage or
+  sensitivity to the small documented environment compatibility deviations?
 
 ## Optimization Trajectory
 
-No learned-policy rollout has run yet. Stages A, C, D, and E pass; Stage B is a diagnosed rule-oracle failure with best transient score 5. The project is now at the genuine closed-loop learned rollout gate.
+Stages A, C, D, and E pass; Stage B is a diagnosed rule-oracle failure with best
+transient score 5. Stage F executed nine genuine learned trials across all
+available same-author ACT candidates. Best learned score is 1/6, so the project
+is PARTIAL and blocked on a capable matching checkpoint rather than pipeline
+execution.

@@ -1,7 +1,7 @@
 project:
   title: "Faithful RoCo 2026 single-rollout reproduction"
   question: "Can the public RoCo gearbox environment and ACT execution path complete one genuine learned closed-loop Task 1 rollout on this machine?"
-  status: active
+  status: partial_public_act_checkpoint_blocker
   started: "2026-08-20"
   domain: "robot learning, bimanual manipulation, Isaac Lab reproducibility"
 
@@ -16,9 +16,9 @@ literature:
     - "The canonical VLA runner disagrees with the ACT training loader about RGB and qpos normalization."
     - "The current repository defaults to R1 Lite although its README describes R1 as the default and the public simulation demonstrations/checkpoint candidate use R1."
   evidence_gaps:
-    - "Empirical task success of the available third-party RoCo-trained ACT checkpoint."
-    - "A demonstration episode small enough to use for the replay diagnostic without downloading the 2.32 TB release."
-    - "Official rule-policy score with the smallest PhysX-legal collision compatibility margins."
+    - "A capable organizer/private or newly trained full-task ACT checkpoint."
+    - "Learned score-6 task success under the validated live execution contract."
+    - "A stable score-6 official rule-policy trajectory under PhysX 5.1."
 
 hypotheses:
   - id: H1
@@ -35,7 +35,7 @@ hypotheses:
     priority: high
   - id: H3
     statement: "yjsm1203/roco_model_act_2 is architecture- and embodiment-compatible with the official R1 Task 1 ACT path."
-    status: supported_policy_gate_rollout_pending
+    status: architecture_supported_task_success_refuted
     motivation: "It is a public RoCo-trained ACT checkpoint with matching stats, but it is not organizer-published and includes additional data."
     parent: null
     priority: high
@@ -131,7 +131,7 @@ hypotheses:
     priority: high
   - id: H19
     statement: "The author's remaining roco_model_act_1 repository exposes a provenance-based checkpoint selection that is architecture-compatible and behaviorally distinct enough to justify one final ACT candidate gate."
-    status: policy_gate_passed_testing_seed_23
+    status: supported_gate_but_seed_23_rollout_failed_unilateral
     motivation: "Both available policy_best checkpoints are empirically unilateral; _1 is the only remaining same-author public ACT repository, but its epoch files require a selection rule fixed before rollout."
     parent: H18
     priority: high
@@ -140,7 +140,7 @@ experiments:
   proxy_metric: "Highest official environment assembly score in a live learned-policy rollout; target score >= 6 with fresh observations at every step."
   baseline_value: 1
   best_value: 1
-  total_runs: 8
+  total_runs: 9
   diagnostic_runs: 27
   trajectory:
     - run: 1
@@ -207,11 +207,19 @@ experiments:
       status: FAIL
       termination: max_steps
       checkpoint: roco_model_act
+    - run: 9
+      seed: 23
+      steps: 590
+      best_score: 0
+      final_score: 0
+      status: FAIL
+      termination: max_steps
+      checkpoint: roco_model_act_1_epoch_2800
 
 outer_loop:
-  cycle: 29
-  last_direction: "Live seed-23 rollout for strictly gated terminal roco_model_act_1 epoch 2800"
-  last_reflection: "The terminal epoch passed every unchanged Stage D criterion and emitted finite actions numerically distinct from both refuted checkpoints. Preserve revision/hashes/stats and run the exact 590-step seed-23 live contract before any behavioral conclusion."
+  cycle: 30
+  last_direction: "Final regression, evidence, documentation, and honest PARTIAL audit"
+  last_reflection: "Terminal _1 epoch seed 23 completed cleanly at score 0 and reproduced the same near-static right arm despite numerically distinct weights. Object-layout fallback seeds cannot supply a missing policy phase. The official source publishes no ACT checkpoint/stats and replacing ACT is outside the fidelity contract; finish all local regression/documentation work and report the capable-checkpoint blocker without manufacturing success."
 
 workspace:
   findings: "findings.md"
