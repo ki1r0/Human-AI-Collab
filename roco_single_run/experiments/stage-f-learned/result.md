@@ -136,3 +136,18 @@ Status: **FAIL** (`max_steps`, best/final score 0/0).
   `28ca8311...2aa`, and audited contact sheet `04094191...9041`.
 
 Next locked run: base candidate seed 17, unchanged policy and runner.
+
+### Base candidate seed 17
+
+Status: **FAIL** (`max_steps`, best/final score 0/0).
+
+- Completed all 590 learned steps with exact model integrity, finite arrays,
+  590 unique hashes for each camera, no done, and no runtime error.
+- Right-arm action standard deviations were again only 0.0012-0.0049 and its
+  gripper was 0.000086, versus 0.018-0.116 for the active left arm.
+- Independent video decode verified 591 H.264 frames over 29.55 s.
+- Evidence hashes: result `077caaa4...e12a3`, trace
+  `5e51abdb...8e33e`, video `26639dd0...cc031`, console
+  `657803a0...a784`.
+
+Next locked run: base candidate seed 42, unchanged policy and runner.

@@ -125,7 +125,7 @@ hypotheses:
     priority: high
   - id: H18
     statement: "The separately published yjsm1203/roco_model_act base checkpoint is architecture-compatible and can produce a broader full-task learned rollout than roco_model_act_2."
-    status: seed_23_failed_testing_seed_17
+    status: seeds_23_17_failed_testing_seed_42
     motivation: "Its direct model card describes training on all filtered gearbox episodes and phases after pin insertion, whereas _2 repeated a left-only first subtask over four seeds."
     parent: H17
     priority: high
@@ -134,7 +134,7 @@ experiments:
   proxy_metric: "Highest official environment assembly score in a live learned-policy rollout; target score >= 6 with fresh observations at every step."
   baseline_value: 1
   best_value: 1
-  total_runs: 5
+  total_runs: 6
   diagnostic_runs: 26
   trajectory:
     - run: 1
@@ -177,11 +177,19 @@ experiments:
       status: FAIL
       termination: max_steps
       checkpoint: roco_model_act
+    - run: 6
+      seed: 17
+      steps: 590
+      best_score: 0
+      final_score: 0
+      status: FAIL
+      termination: max_steps
+      checkpoint: roco_model_act
 
 outer_loop:
-  cycle: 23
-  last_direction: "Fixed-sequence base-candidate seed-17 sensitivity rollout"
-  last_reflection: "Base seed 23 completed cleanly but scored 0 and was again strongly unilateral: left-arm action standard deviations reached 0.015-0.109 while right-arm joints were only 0.0013-0.0049. Visual audit showed an unsuccessful left approach and a static right arm. Continue the locked seed order without tuning to test the remaining layout-sensitivity explanation."
+  cycle: 24
+  last_direction: "Fixed-sequence base-candidate seed-42 sensitivity rollout"
+  last_reflection: "Base seed 17 independently reproduced score 0 and near-static right-arm actions with complete fresh inputs/video and clean shutdown. Two layouts have now failed without any integrity fault; continue unchanged to seed 42 to finish testing whether the checkpoint responds to the remaining preregistered randomized starts."
 
 workspace:
   findings: "findings.md"
