@@ -47,9 +47,15 @@ hypotheses:
     priority: high
   - id: H5
     statement: "The official Galaxea R1 rule policy reaches the intended Task 1 score of 6 after the Stage A compatibility preparation."
-    status: active
+    status: refuted_at_0.15m_offset
     motivation: "This separates environment/controller/physics viability from learned-policy quality before checkpoint rollout."
     parent: H1
+    priority: high
+  - id: H6
+    statement: "Restoring the R1/checkpoint-era 0.20 m table and external-environment workspace offset increases the official rule-oracle score above 3."
+    status: active
+    motivation: "The 0.15 m offset was introduced after R1 Lite became default, while the learned-agent cfg and December 2025 R1 source remain at 0.20 m."
+    parent: H5
     priority: high
 
 experiments:
@@ -57,13 +63,13 @@ experiments:
   baseline_value: null
   best_value: null
   total_runs: 0
-  diagnostic_runs: 2
+  diagnostic_runs: 3
   trajectory: []
 
 outer_loop:
-  cycle: 1
-  last_direction: "environment compatibility"
-  last_reflection: "The scene could step but strict logs exposed invalid PhysX offsets and missing non-color textures. A pinned minimal patch eliminated both while preserving the measured contract."
+  cycle: 2
+  last_direction: "R1 workspace geometry"
+  last_reflection: "The official R1 oracle ran without infrastructure errors but scored only 3/6. Source history shows it was paired with a later R1-Lite workspace offset, so the next run isolates that one factor."
 
 workspace:
   findings: "findings.md"

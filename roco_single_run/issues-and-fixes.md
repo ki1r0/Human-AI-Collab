@@ -89,3 +89,13 @@
 - **Result:** The identical Stage A regression completed with no `[Error]`, missing-asset, PhysX-error, or traceback lines. Robot, camera, timing, and hold-step observations remained consistent.
 - **Fix:** Run `scripts/prepare_official_checkout.py` before any experiment. Treat the neutral non-color textures as a visual APPROXIMATION and the collision change as a required PhysX compatibility deviation.
 - **Regression status:** PASS — result SHA-256 `c6a2694b3192f8d3ebca574af5bf0d3251cfb559e3cc7f9b5fbeadaaa8417d1e`.
+
+## ISSUE-010 — R1 paired with a later R1-Lite workspace offset
+
+- **Symptom:** The first official rule-oracle run completed its schedule but reached only best score 3/6; gear 2, gear 4, and the carrier/ring relationship never scored.
+- **Hypothesis:** Selecting R1 alone is insufficient because current table/external cfg offsets were changed from 0.20 m to 0.15 m after R1 Lite became the default.
+- **Evidence:** December 2025 R1 source uses 0.20 m everywhere; May 2026 commit `5631142` changes the table/external environment to 0.15 m; current learned-agent cfg still uses 0.20 m.
+- **Experiment:** Restore only the table and external environment to the R1/checkpoint-era 0.20 m workspace and repeat the locked oracle.
+- **Result:** Pending.
+- **Fix:** `prepare_official_checkout.py` now asserts/restores 0.20 m for the table, external environment, and agent environment whenever the R1 integration is prepared.
+- **Regression status:** OPEN.

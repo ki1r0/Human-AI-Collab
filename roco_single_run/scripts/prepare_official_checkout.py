@@ -100,6 +100,20 @@ def _patch_collision_offsets(path: Path) -> dict:
     }
 
 
+def _patch_r1_x_offset(path: Path) -> str:
+    """Restore the 0.20 m R1/checkpoint-era workspace offset."""
+    source = path.read_text(encoding="utf-8")
+    current_pattern = r"^    x_offset = 0\.15$" if "env_cfg" in path.name else r"^x_offset = 0\.15$"
+    target_line = "    x_offset = 0.2" if "env_cfg" in path.name else "x_offset = 0.2"
+    if re.search(rf"^{re.escape(target_line)}$", source, flags=re.MULTILINE):
+        return "already-0.20"
+    patched, count = re.subn(current_pattern, target_line, source, count=1, flags=re.MULTILINE)
+    if count != 1:
+        raise RuntimeError(f"Could not identify R1 workspace x_offset in {path}")
+    path.write_text(patched, encoding="utf-8")
+    return "restored-0.20"
+
+
 def _png_rgb(width: int, height: int, rgb: tuple[int, int, int]) -> bytes:
     """Encode a tiny deterministic RGB PNG using only the standard library."""
     signature = b"\x89PNG\r\n\x1a\n"
@@ -151,6 +165,23 @@ def main() -> None:
         "commit": head,
         "robot_bundle": _patch_robot_bundle(package_root / "robots" / "robot_bundles.py"),
         "collision_offsets": _patch_collision_offsets(package_root / "robots" / "gears_assets.py"),
+        "r1_workspace_offsets": {
+            "table": _patch_r1_x_offset(package_root / "robots" / "gears_assets.py"),
+            "external_environment": _patch_r1_x_offset(
+                package_root
+                / "tasks"
+                / "direct"
+                / "galaxea_lab_external"
+                / "galaxea_lab_external_env_cfg.py"
+            ),
+            "agent_environment": _patch_r1_x_offset(
+                package_root
+                / "tasks"
+                / "direct"
+                / "galaxea_lab_agent"
+                / "galaxea_lab_agent_env_cfg.py"
+            ),
+        },
         "table_textures": _supply_missing_table_textures(extension_root / "assets" / "Props" / "table"),
     }
     print(json.dumps(result, indent=2, sort_keys=True))
