@@ -111,13 +111,13 @@ experiments:
   baseline_value: null
   best_value: null
   total_runs: 0
-  diagnostic_runs: 15
+  diagnostic_runs: 18
   trajectory: []
 
 outer_loop:
-  cycle: 11
-  last_direction: "Live observation contract"
-  last_reflection: "The 7 mm reducer target is an under-grasp: the fingers reached 7.06 mm but the reducer remained at its source and fell back before transport. Restore the official zero target, preserve Stage B as a diagnosed failure, and advance to the required synchronized observation probe without introducing a non-reference manipulation hack."
+  cycle: 12
+  last_direction: "Real ACT checkpoint and normalization"
+  last_reflection: "Stage C now passes structural, hash, visual, and active-freshness checks. Download the pinned third-party RoCo ACT checkpoint and paired stats, then prove exact weight loading, preprocessing, finite chunk output, temporal aggregation, denormalization, reordering, and reset behavior on the saved live observation."
 
 workspace:
   findings: "findings.md"

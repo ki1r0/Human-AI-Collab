@@ -186,9 +186,9 @@
 - **Hypothesis:** The policy contract requires treating each scalar gripper as one feature, producing `(1, 1)` before concatenation.
 - **Evidence:** The live tensor error was `Tensors must have same number of dimensions: got 2 and 1`; the official runner likewise builds a 14-D vector from six arm values plus each scalar gripper.
 - **Experiment:** Unsqueeze only the last dimension of both live gripper observations, retain the canonical `[L arm, L grip, R arm, R grip]` ordering, and repeat the probe.
-- **Result:** Pending.
+- **Result:** Supported — after adding the singleton dimensions, live qpos is finite float32 `(1, 14)` and its explicit names match the canonical order.
 - **Fix:** Explicit `.unsqueeze(-1)` on both gripper observations in the Stage C probe.
-- **Regression status:** OPEN.
+- **Regression status:** PASS in Stage C.
 
 ## ISSUE-020 — Static hold cannot distinguish a correct frame from a stale frame
 
@@ -196,6 +196,6 @@
 - **Hypothesis:** The scene and attached cameras are static under an absolute-position hold, so equality is expected but cannot positively prove frame refresh.
 - **Evidence:** The three saved views are valid and distinct on visual inspection, while their reset-to-step mean absolute differences are exactly zero.
 - **Experiment:** After saving the canonical observation, command only a bounded +0.05/-0.05 rad change in the first left/right controlled arm joints for five steps and compare all new camera tensors against clones of the saved tensors.
-- **Result:** Pending.
+- **Result:** Supported — the active check produced mean absolute pixel changes of 5.18 (head), 35.14 (left wrist), and 22.01 (right wrist), while the saved canonical package remained pre-perturbation.
 - **Fix:** Add an active, diagnostic-only freshness perturbation; keep it outside all policy input and rollout paths.
-- **Regression status:** OPEN.
+- **Regression status:** PASS in Stage C.
