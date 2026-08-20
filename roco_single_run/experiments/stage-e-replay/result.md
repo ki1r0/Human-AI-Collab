@@ -1,6 +1,6 @@
 # Stage E result
 
-Status: **IN PROGRESS**.
+Status: **PASS by preregistered equivalent action-interface test**.
 
 ## Official DataReplay attempts
 
@@ -14,5 +14,23 @@ Status: **IN PROGRESS**.
   0.80 threshold. Best/final task score was 0 because seed 1 does not reproduce
   the demonstration image/layout and the HDF5 omits its source reset metadata.
 
-The independent preregistered equivalent-interface follow-up is pending. The
-full replay is not retroactively reclassified.
+## Equivalent-interface follow-up
+
+The fresh seed-42 follow-up passed all locked criteria across 40 steps. Positive,
+return, negative, and final-return phases each exercised 13–14 demanded
+channels, achieved direction agreement 1.0, displacement cosine 0.9924–0.9940,
+and final target mean absolute error 0.00186–0.00188. Final return error was
+0.001878; mapping sentinel, timing, finiteness, and no-done checks all passed.
+
+Evidence:
+
+- `artifacts/replay_probe/equivalent_run1/result.json` SHA-256
+  `d124664334322d15b4015adee34cf90c359fc3bc248e02c97196a30ce0b5b321`.
+- `artifacts/replay_probe/equivalent_run1/trace.npz` SHA-256
+  `e648121dcd24a05d75b6702535cf0b09d3f95e5f890399d5bd8a727ce6f93a25`.
+- `artifacts/replay_probe/equivalent_run1/console.log` SHA-256
+  `c980c3c94cbc70a8555732493b173e9ddd2289e41912712255a4d568744a910c`.
+
+The full replay remains FAIL and is not retroactively reclassified; Stage E
+passes through the independently preregistered equivalent route allowed by the
+mission.

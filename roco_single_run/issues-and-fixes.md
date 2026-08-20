@@ -255,6 +255,9 @@
 - **Experiment:** Preserve replay FAIL. On fresh seed 42, command bounded positive,
   return, negative, and return targets for ten steps each, preregistering phase
   settling error, displacement cosine, and direction thresholds.
-- **Result:** Pending independent equivalent-interface probe.
-- **Fix:** None yet; do not weaken or reinterpret the original replay gate.
-- **Regression status:** PENDING Stage E iteration 2.
+- **Result:** The fresh test passed every preregistered phase: direction agreement
+  1.0, displacement cosine 0.9924–0.9940, target MAE 0.00186–0.00188, and final
+  return error 0.001878 across all 40 action steps.
+- **Fix:** Retain replay FAIL unchanged and use the independent equivalent result
+  as the Stage E acceptance route. The learned runner uses the same shared mapping.
+- **Regression status:** PASS in Stage E iteration 2.

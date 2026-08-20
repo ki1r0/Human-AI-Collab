@@ -113,9 +113,15 @@ hypotheses:
     priority: high
   - id: H16
     statement: "A fresh reversible held-target probe passes the unchanged learned-agent action interface with correct mapping, direction, and settling on all 14 channels."
-    status: testing
+    status: supported
     motivation: "The full replay tracked targets closely but its locked per-step residual-direction metric failed; an independent held-target test removes inertial ambiguity without reusing replay outcomes as confirmation."
     parent: H15
+    priority: high
+  - id: H17
+    statement: "The pinned third-party RoCo ACT candidate reaches explicit official Task 1 score 6 in a genuine live closed-loop episode on at least one preregistered seed."
+    status: testing_seed_23
+    motivation: "Environment, observation, real-policy, and action-interface gates are complete; empirical learned task success is the remaining primary claim."
+    parent: H3
     priority: high
 
 experiments:
@@ -123,13 +129,13 @@ experiments:
   baseline_value: null
   best_value: null
   total_runs: 0
-  diagnostic_runs: 23
+  diagnostic_runs: 24
   trajectory: []
 
 outer_loop:
-  cycle: 15
-  last_direction: "Independent reversible equivalent action-interface probe"
-  last_reflection: "The full official replay completed with 0.010 mean target error but failed its locked direction metric because residual correction and inertial motion were compared at every step. Preserve the FAIL and independently test held reversible targets on a fresh seed before learned rollout."
+  cycle: 16
+  last_direction: "Genuine closed-loop ACT rollout, seed 23"
+  last_reflection: "Stage E passes through an independently preregistered reversible interface test with exact mapping, 1.0 direction agreement, ~0.993 displacement cosine, and ~0.00188 settling error in all four phases. Lock the learned runner, full evidence bundle, explicit scorer, and fixed seed sequence before the first rollout."
 
 workspace:
   findings: "findings.md"

@@ -20,6 +20,9 @@ The public official repository contains no learned checkpoint or normalization s
 - The policy/environment 14-D reordering is supported by source history and current environment joint-index construction.
 - Stage A passes after a pinned compatibility preparation: the live R1 task runs at 100 Hz physics / 20 Hz control and exposes three 240×320 uint8 RGB plus three float32 depth streams.
 - The public source has two runtime defects independent of policy quality: invalid PhysX contact offsets and absent oak-table normal/roughness textures.
+- Stage C passes with three visually inspected, actively refreshed RGB feeds and canonical finite 14-D qpos.
+- Stage D strictly loads the 83,923,087-parameter candidate and paired stats, then passes normalization, chunk, temporal aggregation, denormalization, reorder, and reset checks on a real live observation.
+- The full official DataReplay episode executed all 590 actions but failed its locked residual-direction threshold and scored 0 on a visibly different reset layout. A fresh independently preregistered equivalent-interface probe then passed all 14 channels in both directions with 1.0 direction agreement and about 0.00188 target error.
 
 ## Patterns and Insights
 
@@ -36,11 +39,9 @@ Several apparent runtime failures can be predicted from source mismatches rather
 
 ## Open Questions
 
-- Can the official R1 rule policy still reach score 6 under the PhysX-valid minimal contact offsets?
-- Does the third-party ACT checkpoint load with zero missing/unexpected keys and plausible stats?
-- Does its initial-state distribution match the current official R1 environment reset?
-- Can a compact official demonstration be obtained for the replay action-interface diagnostic?
+- Can the third-party ACT candidate reach explicit score 6 in one of the fixed learned-rollout seeds without any policy or task tuning?
+- Does its learned visual behavior tolerate the prepared environment's neutral replacement table textures and current PhysX compatibility offsets?
 
 ## Optimization Trajectory
 
-No learned-policy rollout has run yet. Environment integrity passed; the project is at the official rule-policy oracle gate.
+No learned-policy rollout has run yet. Stages A, C, D, and E pass; Stage B is a diagnosed rule-oracle failure with best transient score 5. The project is now at the genuine closed-loop learned rollout gate.
