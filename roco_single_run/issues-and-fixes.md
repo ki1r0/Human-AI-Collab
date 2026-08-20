@@ -219,3 +219,21 @@
 - **Result:** Supported — the aliases load the exact pinned arrays; all four required arrays are finite `(14,)`, both standard-deviation vectors are positive, and Stage D inference passes.
 - **Fix:** Add the narrow module aliases only in the pinned stats loader.
 - **Regression status:** PASS in Stage D.
+
+## ISSUE-023 — Reference DataReplay wrapper assigns a read-only property
+
+- **Symptom:** Stage E attempt 1 exits from `DataReplayPolicyWrapper.__init__`
+  with `AttributeError: property 'device' ... has no setter` before creating the
+  environment.
+- **Hypothesis:** The wrapper subclass was updated to accept an explicit device,
+  but the base class retained a getter-only `device` property.
+- **Evidence:** `PolicyWrapper.device` defines only a getter at line 83, while
+  `DataReplayPolicyWrapper.__init__` assigns `self.device = device` at line 367
+  in the pinned upstream checkout.
+- **Experiment:** Subclass the reference wrapper locally and add only a
+  `torch.device`-backed setter/getter, inheriting its HDF5 loader, action tensor,
+  step counter, reset, and `predict()` unchanged.
+- **Result:** Attempt 1 is retained as ERROR; the compatibility replay is pending.
+- **Fix:** Use `CompatibleDataReplayPolicyWrapper` only for this upstream API
+  mismatch. Do not patch the official checkout or trajectory.
+- **Regression status:** PENDING Stage E rerun.

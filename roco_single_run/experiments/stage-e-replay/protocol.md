@@ -54,3 +54,11 @@ Task success is reported separately. It is not an action-interface pass
 criterion because the released file omits the random reset seed/object poses;
 therefore a replayed open-loop robot trajectory cannot be asserted to match its
 source scene.
+
+## Compatibility note after attempt 1
+
+Attempt 1 failed before environment creation because the upstream subclass
+assigns `self.device` while its base class exposes `device` as a read-only
+property. The retained compatibility subclass adds only a setter backed by
+`torch.device`; all upstream HDF5 loading, concatenation, step indexing, and
+`predict()` behavior remain inherited and unchanged. No pass criterion changed.

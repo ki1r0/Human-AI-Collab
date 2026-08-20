@@ -117,7 +117,7 @@ experiments:
   baseline_value: null
   best_value: null
   total_runs: 0
-  diagnostic_runs: 21
+  diagnostic_runs: 22
   trajectory: []
 
 outer_loop:

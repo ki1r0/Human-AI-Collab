@@ -42,6 +42,18 @@ DATA_SIZE = 951_664_104
 CAMERA_KEYS = ("head_rgb", "left_hand_rgb", "right_hand_rgb")
 
 
+class CompatibleDataReplayPolicyWrapper(DataReplayPolicyWrapper):
+    """Repair only the upstream base/subclass device-property mismatch."""
+
+    @property
+    def device(self) -> torch.device:
+        return self._replay_device
+
+    @device.setter
+    def device(self, value: str | torch.device) -> None:
+        self._replay_device = torch.device(value)
+
+
 def file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -137,7 +149,7 @@ def main() -> None:
             max(data_next_qpos_error.max(), final_hold_error.max())
         )
 
-        replay = DataReplayPolicyWrapper(str(data_path), device=args.device)
+        replay = CompatibleDataReplayPolicyWrapper(str(data_path), device=args.device)
         wrapper_actions = replay.actions.detach().cpu().numpy()
         file_environment_actions = policy_to_environment_numpy(file_policy_actions)
         wrapper_file_max_error = float(np.abs(wrapper_actions - file_environment_actions).max())
