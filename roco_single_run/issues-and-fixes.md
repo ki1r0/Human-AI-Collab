@@ -206,6 +206,16 @@
 - **Hypothesis:** Importing `Galaxea_Lab_External.VLA...` executes the package root, which eagerly imports task/environment modules that require Isaac Sim, even though ACT itself is standalone PyTorch.
 - **Evidence:** The traceback enters `Galaxea_Lab_External/__init__.py -> tasks -> isaaclab.assets` before reaching ACT policy code.
 - **Experiment:** Put the official checkout's `VLA/ACT` directory on `PYTHONPATH` and import the exact official `act.policy.ACTPolicy` module directly.
-- **Result:** Pending.
+- **Result:** Supported — the direct `act.policy` import reached stats loading without importing any Isaac environment module.
 - **Fix:** Use the direct official ACT subpackage in policy-only and learned-runner processes; environment imports remain after `AppLauncher` in simulator processes.
+- **Regression status:** PASS for import isolation; full Stage D still pending.
+
+## ISSUE-022 — Stats pickle uses a NumPy 2 private module name
+
+- **Symptom:** The second Stage D attempt failed at `pickle.load()` with `No module named 'numpy._core'`.
+- **Hypothesis:** The stats were serialized by NumPy 2, while the Isaac Lab image ships NumPy 1.x and exposes the equivalent implementation as `numpy.core`.
+- **Evidence:** `pickletools` finds only `numpy._core.multiarray._reconstruct`, `numpy.ndarray`, and `numpy.dtype` globals; the pinned file contains the expected five arrays and no arbitrary application classes.
+- **Experiment:** After SHA-256 verification and before deserialization, alias `numpy._core` and `numpy._core.multiarray` to their NumPy 1.x equivalents, then retain all strict shape/finite/std checks.
+- **Result:** Pending.
+- **Fix:** Add the narrow module aliases only in the pinned stats loader.
 - **Regression status:** OPEN.

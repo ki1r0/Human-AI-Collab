@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import pickle
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -73,6 +74,12 @@ class RocoActPolicy:
         if self.stats_sha256 != STATS_SHA256:
             raise RuntimeError(f"Stats hash mismatch: {self.stats_sha256} != {STATS_SHA256}")
 
+        # NumPy 2 pickles name the private module ``numpy._core``.  The pinned
+        # stats contain only ndarray reconstruction, but Isaac Lab ships NumPy
+        # 1.x where the same implementation is exposed as ``numpy.core``.
+        if "numpy._core" not in sys.modules:
+            sys.modules["numpy._core"] = np.core
+            sys.modules["numpy._core.multiarray"] = np.core.multiarray
         with self.stats_path.open("rb") as stream:
             stats = pickle.load(stream)
         required = {"qpos_mean", "qpos_std", "action_mean", "action_std"}
