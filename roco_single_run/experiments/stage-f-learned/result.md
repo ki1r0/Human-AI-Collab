@@ -50,3 +50,17 @@ Status: **FAIL** (`max_steps`, best/final score 0/0).
   `806c603f...c4eff`.
 
 Next locked run: seed 42, unchanged policy and runner.
+
+## Seed 42
+
+Status: **FAIL** (`max_steps`, best/final score 0/0).
+
+- Completed all model, camera-freshness, trace, 591-frame video, and shutdown
+  checks with no score transition.
+- Right-arm action standard deviations again remained 0.0011–0.0047 and the
+  right-gripper std was 0.000526. This is the third visually unilateral run.
+- Evidence hashes: result `20139c2c...1b7fe`, trace
+  `1ba8a99c...f0ede`, video `d736f856...67d6f`, console
+  `77c36d2d...b3ec1`.
+
+Next locked run: seed 2026, unchanged policy and runner.

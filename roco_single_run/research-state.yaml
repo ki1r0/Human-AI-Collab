@@ -119,7 +119,7 @@ hypotheses:
     priority: high
   - id: H17
     statement: "The pinned third-party RoCo ACT candidate reaches explicit official Task 1 score 6 in a genuine live closed-loop episode on at least one preregistered seed."
-    status: testing_seed_42_after_scores_1_and_0
+    status: testing_seed_2026_after_scores_1_0_0
     motivation: "Environment, observation, real-policy, and action-interface gates are complete; empirical learned task success is the remaining primary claim."
     parent: H3
     priority: high
@@ -128,7 +128,7 @@ experiments:
   proxy_metric: "Highest official environment assembly score in a live learned-policy rollout; target score >= 6 with fresh observations at every step."
   baseline_value: 1
   best_value: 1
-  total_runs: 2
+  total_runs: 3
   diagnostic_runs: 24
   trajectory:
     - run: 1
@@ -147,11 +147,19 @@ experiments:
       status: FAIL
       termination: max_steps
       checkpoint: roco_model_act_2
+    - run: 3
+      seed: 42
+      steps: 590
+      best_score: 0
+      final_score: 0
+      status: FAIL
+      termination: max_steps
+      checkpoint: roco_model_act_2
 
 outer_loop:
-  cycle: 18
-  last_direction: "Genuine closed-loop ACT rollout, preregistered seed 42"
-  last_reflection: "Seed 17 completed cleanly at score 0: the left arm approached but failed its first gear, while right-arm output variance was even smaller than seed 23. Continue the fixed sequence; repeated unilateral behavior increasingly supports checkpoint task-collapse rather than interface failure."
+  cycle: 19
+  last_direction: "Genuine closed-loop ACT rollout, final preregistered roco_model_act_2 seed 2026"
+  last_reflection: "Seed 42 also completed cleanly at score 0 with right-arm std only 0.0011–0.0047. Run the final fixed seed; if unilateral behavior persists, reject _2 as a full-task candidate and preregister the separately described base ACT checkpoint."
 
 workspace:
   findings: "findings.md"
