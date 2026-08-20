@@ -1,0 +1,68 @@
+project:
+  title: "Faithful RoCo 2026 single-rollout reproduction"
+  question: "Can the public RoCo gearbox environment and ACT execution path complete one genuine learned closed-loop Task 1 rollout on this machine?"
+  status: active
+  started: "2026-08-20"
+  domain: "robot learning, bimanual manipulation, Isaac Lab reproducibility"
+
+literature:
+  key_papers:
+    - id: roco2026
+      title: "RoCo Challenge at AAAI 2026: Benchmarking Robotic Collaborative Manipulation for Assembly Towards Industrial Automation"
+      url: "https://arxiv.org/abs/2603.15469"
+      relevance: "Primary benchmark/task definition and baseline provenance."
+  open_problems:
+    - "The official public repository does not publish an ACT checkpoint or matching dataset_stats.pkl."
+    - "The canonical VLA runner disagrees with the ACT training loader about RGB and qpos normalization."
+    - "The current repository defaults to R1 Lite although its README describes R1 as the default and the public simulation demonstrations/checkpoint candidate use R1."
+  evidence_gaps:
+    - "Runtime RGB dtype/range from the selected Isaac environment."
+    - "Empirical task success of the available third-party RoCo-trained ACT checkpoint."
+    - "A demonstration episode small enough to use for the replay diagnostic without downloading the 2.32 TB release."
+
+hypotheses:
+  - id: H1
+    statement: "The local nvcr.io/nvidia/isaac-lab:2.3.0 image can launch the pinned RoCo R1 Task 1 environment with all assets resolved."
+    status: active
+    motivation: "The image matches the official Isaac Lab 2.3.0 / Isaac Sim 5.1.0 contract and isolates the contaminated host Conda setup."
+    parent: null
+    priority: high
+  - id: H2
+    statement: "Training-faithful ACT inference requires RGB division by 255 and qpos standardization using the checkpoint's dataset_stats.pkl."
+    status: active
+    motivation: "The ACT dataset loader and upstream ACT eval path apply both transformations, while scripts/VLA_agent.py omits both."
+    parent: null
+    priority: high
+  - id: H3
+    statement: "yjsm1203/roco_model_act_2 is architecture- and embodiment-compatible with the official R1 Task 1 ACT path."
+    status: pending
+    motivation: "It is a public RoCo-trained ACT checkpoint with matching stats, but it is not organizer-published and includes additional data."
+    parent: null
+    priority: high
+  - id: H4
+    statement: "The exact policy-to-environment mapping is [L0..L5,Lgrip,R0..R5,Rgrip] -> [L0..L5,R0..R5,Lgrip,Rgrip]."
+    status: supported
+    motivation: "The official runner commit 0b8ad47 added this mapping to match the environment joint index construction."
+    parent: null
+    priority: high
+
+experiments:
+  proxy_metric: "Highest official environment assembly score in a live learned-policy rollout; target score >= 6 with fresh observations at every step."
+  baseline_value: null
+  best_value: null
+  total_runs: 0
+  trajectory: []
+
+outer_loop:
+  cycle: 0
+  last_direction: null
+  last_reflection: ""
+
+workspace:
+  findings: "findings.md"
+  log: "research-log.md"
+  literature_dir: "literature/"
+  experiments_dir: "experiments/"
+  to_human_dir: "to_human/"
+  paper_dir: "paper/"
+
