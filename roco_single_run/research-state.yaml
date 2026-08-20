@@ -105,6 +105,12 @@ hypotheses:
     motivation: "Doubling the global effort cap regressed the whole trajectory, while the reducer is squeezed to about 6.8 mm by a zero-position command; the reducer pickup branch can be isolated without changing earlier grasps."
     parent: H13
     priority: high
+  - id: H15
+    statement: "The upstream DataReplayPolicyWrapper can execute a pinned official R1 simulation demonstration through the unchanged live learned-agent action interface with bounded tracking error."
+    status: testing
+    motivation: "This isolates absolute-action ordering, controller application, and live stepping before the learned closed-loop rollout."
+    parent: H4
+    priority: high
 
 experiments:
   proxy_metric: "Highest official environment assembly score in a live learned-policy rollout; target score >= 6 with fresh observations at every step."
@@ -115,9 +121,9 @@ experiments:
   trajectory: []
 
 outer_loop:
-  cycle: 13
-  last_direction: "Replay/equivalent action-interface validation"
-  last_reflection: "Stage D strictly loads the real checkpoint and paired stats, produces finite plausible actions from an actual live observation, and passes temporal reset/reorder checks. Locate a compact known trajectory or generate an audited official scripted trajectory to validate the live agent environment action interface before closed-loop ACT execution."
+  cycle: 14
+  last_direction: "Full official demonstration replay through the live action interface"
+  last_reflection: "Pinned official episode 1 is compact at 590 steps, its actions exactly equal next-step qpos, and the reference repository provides DataReplayPolicyWrapper. Execute the full trajectory without scene tuning and evaluate the preregistered controller-tracking gate."
 
 workspace:
   findings: "findings.md"
