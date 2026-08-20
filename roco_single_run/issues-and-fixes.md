@@ -18,7 +18,7 @@
 - **Experiment:** Inspected existing local runtimes and Docker images.
 - **Result:** `nvcr.io/nvidia/isaac-lab:2.3.0` is locally cached and matches the official RoCo environment pins.
 - **Fix:** Use the isolated container; do not alter host Conda or the dirty host IsaacLab checkout.
-- **Regression status:** PARTIAL — container Python/Torch/CUDA pass; full Kit launch pending.
+- **Regression status:** PASS — Stage A launched Kit, the R1 scene, RTX cameras, and repeated physics steps in the container.
 
 ## ISSUE-003 — Container driver metadata mismatch
 
@@ -27,8 +27,8 @@
 - **Evidence:** Docker image config and `nvidia-smi` disagree on the version floor.
 - **Experiment:** Ran `/isaac-sim/python.sh` with GPU 2 and imported torch.
 - **Result:** torch 2.7.0+cu128 reports CUDA available and identifies the RTX A5000.
-- **Fix:** None yet; run the smallest headless Isaac/Kit environment test next. Fall back to the host 5.1.0 runtime only if Kit proves incompatible.
-- **Regression status:** OPEN.
+- **Fix:** No driver mutation was needed. Preserve the isolated container and keep GPU/renderer errors as hard launch gates.
+- **Regression status:** PASS for the selected R1 workload — two Stage A scene launches and RTX camera steps completed; the version mismatch remains a documented portability risk.
 
 ## ISSUE-004 — No official learned checkpoint is published
 
@@ -58,7 +58,7 @@
 - **Experiment:** Compared current README, bundle history, checkpoint dates, and dataset embodiment metadata.
 - **Result:** R1 is the checkpoint-compatible official embodiment for this rollout.
 - **Fix:** Use the repository-supported one-line R1 bundle selection in the isolated checkout and record the patch.
-- **Regression status:** OPEN — environment and checkpoint state ranges pending.
+- **Regression status:** PARTIAL — Stage A verified the live R1 joint names, indices, camera paths, and reset state; checkpoint range comparison remains pending.
 
 ## ISSUE-007 — Native success termination bug
 
@@ -80,3 +80,12 @@
 - **Fix:** No content rewrite. Preserve official checkout and validate assets again before launch.
 - **Regression status:** PASS for pointer resolution; Stage A asset loading pending.
 
+## ISSUE-009 — Invalid collision offsets and absent table textures
+
+- **Symptom:** The initial Stage A scene emitted six `PxShape::setContactOffset` errors and repeated missing references for `OakTable_N.png` and `OakTable_R.png`.
+- **Hypothesis:** Current upstream gear assets set `contact_offset=0`, which violates PhysX 5.1's positive-and-greater-than-rest rule; the committed oak-table USD references two files absent from every official tree revision.
+- **Evidence:** The failures are in `runs/stage_a/console.log`; source inspection found three negative-rest assets with zero contact offset and one positive-rest asset with an even smaller contact offset. Git tree/history contains neither texture.
+- **Experiment:** Added an idempotent preparation step pinned to the official commit. It preserves the authors' negative 0.5 mm gear rest offset, uses a 0.1 mm positive gear contact offset, uses 1.0/0.5 mm contact/rest offsets for the carrier, and supplies 4×4 neutral normal/roughness maps.
+- **Result:** The identical Stage A regression completed with no `[Error]`, missing-asset, PhysX-error, or traceback lines. Robot, camera, timing, and hold-step observations remained consistent.
+- **Fix:** Run `scripts/prepare_official_checkout.py` before any experiment. Treat the neutral non-color textures as a visual APPROXIMATION and the collision change as a required PhysX compatibility deviation.
+- **Regression status:** PASS — result SHA-256 `c6a2694b3192f8d3ebca574af5bf0d3251cfb559e3cc7f9b5fbeadaaa8417d1e`.

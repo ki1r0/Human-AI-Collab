@@ -18,6 +18,8 @@ The public official repository contains no learned checkpoint or normalization s
 - All 76 listed LFS assets in the official checkout are materialized; no unresolved LFS pointers were found.
 - A locally cached Isaac Lab 2.3.0 container matches the official runtime versions and exposes GPU inference.
 - The policy/environment 14-D reordering is supported by source history and current environment joint-index construction.
+- Stage A passes after a pinned compatibility preparation: the live R1 task runs at 100 Hz physics / 20 Hz control and exposes three 240×320 uint8 RGB plus three float32 depth streams.
+- The public source has two runtime defects independent of policy quality: invalid PhysX contact offsets and absent oak-table normal/roughness textures.
 
 ## Patterns and Insights
 
@@ -30,16 +32,15 @@ Several apparent runtime failures can be predicted from source mismatches rather
 - Do not use the existing Franka/magic-assembly project path as a substitute for the Galaxea R1 environment.
 - Do not claim an official checkpoint: the organizer repository publishes only a placeholder path.
 - Treat environment success termination independently: current `_get_dones()` compares the `(score, time)` tuple to `6`, so native success termination is defective.
+- Always run the commit-pinned preparation step; its neutral table normal/roughness maps are an explicit visual approximation.
 
 ## Open Questions
 
-- Can Kit fully launch on driver 550.163.01 even though the container metadata names 570.169 as minimum?
-- What exact dtype/range do live Isaac camera tensors have in this environment?
+- Can the official R1 rule policy still reach score 6 under the PhysX-valid minimal contact offsets?
 - Does the third-party ACT checkpoint load with zero missing/unexpected keys and plausible stats?
 - Does its initial-state distribution match the current official R1 environment reset?
 - Can a compact official demonstration be obtained for the replay action-interface diagnostic?
 
 ## Optimization Trajectory
 
-No learned-policy rollout has run yet. The project remains at the provenance and environment-integrity gate.
-
+No learned-policy rollout has run yet. Environment integrity passed; the project is at the official rule-policy oracle gate.

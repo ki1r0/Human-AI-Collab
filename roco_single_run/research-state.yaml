@@ -16,14 +16,14 @@ literature:
     - "The canonical VLA runner disagrees with the ACT training loader about RGB and qpos normalization."
     - "The current repository defaults to R1 Lite although its README describes R1 as the default and the public simulation demonstrations/checkpoint candidate use R1."
   evidence_gaps:
-    - "Runtime RGB dtype/range from the selected Isaac environment."
     - "Empirical task success of the available third-party RoCo-trained ACT checkpoint."
     - "A demonstration episode small enough to use for the replay diagnostic without downloading the 2.32 TB release."
+    - "Official rule-policy score after correcting upstream PhysX-invalid collision offsets."
 
 hypotheses:
   - id: H1
     statement: "The local nvcr.io/nvidia/isaac-lab:2.3.0 image can launch the pinned RoCo R1 Task 1 environment with all assets resolved."
-    status: active
+    status: supported_with_compatibility_patch
     motivation: "The image matches the official Isaac Lab 2.3.0 / Isaac Sim 5.1.0 contract and isolates the contaminated host Conda setup."
     parent: null
     priority: high
@@ -45,18 +45,25 @@ hypotheses:
     motivation: "The official runner commit 0b8ad47 added this mapping to match the environment joint index construction."
     parent: null
     priority: high
+  - id: H5
+    statement: "The official Galaxea R1 rule policy reaches the intended Task 1 score of 6 after the Stage A compatibility preparation."
+    status: active
+    motivation: "This separates environment/controller/physics viability from learned-policy quality before checkpoint rollout."
+    parent: H1
+    priority: high
 
 experiments:
   proxy_metric: "Highest official environment assembly score in a live learned-policy rollout; target score >= 6 with fresh observations at every step."
   baseline_value: null
   best_value: null
   total_runs: 0
+  diagnostic_runs: 2
   trajectory: []
 
 outer_loop:
-  cycle: 0
-  last_direction: null
-  last_reflection: ""
+  cycle: 1
+  last_direction: "environment compatibility"
+  last_reflection: "The scene could step but strict logs exposed invalid PhysX offsets and missing non-color textures. A pinned minimal patch eliminated both while preserving the measured contract."
 
 workspace:
   findings: "findings.md"
@@ -65,4 +72,3 @@ workspace:
   experiments_dir: "experiments/"
   to_human_dir: "to_human/"
   paper_dir: "paper/"
-
