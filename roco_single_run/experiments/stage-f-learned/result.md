@@ -191,3 +191,23 @@ public full-task Task 1 solution under the reproduced contract.
 The reproduction still has no learned score-6 episode. The only remaining
 same-author public ACT repository is `_1`; it will be considered only if a
 provenance-based immutable epoch selection can be fixed before any rollout.
+
+## Terminal `_1` epoch policy gate
+
+Status: **PASS**.
+
+The preregistered terminal artifact
+`yjsm1203/roco_model_act_1@fb02c3ef63ea946bf9cc4d0447e2ef0598b10e78`
+epoch 2800 passed the complete Stage D gate. Exact checkpoint/stats hashes are
+`8696496e...6c5c` / `31699064...5476`. All 344 tensors (83,923,087
+parameters) loaded strictly; normalization, finite `(1,100,14)` output, exact
+reorder, physical bounds, temporal advance/change, and reset reproducibility
+all passed. The first action was numerically distinct from both refuted
+checkpoints.
+
+Evidence under `runs/policy_probe_act1_epoch2800/`: result SHA-256
+`ee8ac7ba12fb3991c079db1a5013f1490a8f7eecedce748db3deaea6b646834a` and
+console SHA-256
+`4d036070b713a43f6d522ed44ddac63f23256b2dd154779697ff817d0af2e43b`.
+
+Next locked run: terminal `_1` epoch, seed 23, unchanged live runner.
