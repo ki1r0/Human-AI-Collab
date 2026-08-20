@@ -99,3 +99,23 @@
 - **Result:** Supported but insufficient — best score improved from 3 to 4 and all three pin gears mounted; ring/carrier still failed.
 - **Fix:** `prepare_official_checkout.py` now asserts/restores 0.20 m for the table, external environment, and agent environment whenever the R1 integration is prepared.
 - **Regression status:** PARTIAL — 0.20 m retained; randomized ring-placement sweep pending.
+
+## ISSUE-011 — Randomization does not explain ring insertion failure
+
+- **Symptom:** The corrected-workspace oracle remained below score 6 and appeared sensitive to the randomized ring start.
+- **Hypothesis:** At least one of preregistered seeds 17, 23, and 42 would exceed score 4 because a more reachable start would enable the ring grasp.
+- **Evidence:** Boundary state and RGB snapshots were recorded for every ring pick/mount phase in all three runs.
+- **Experiment:** Repeated the identical 0.20 m R1 oracle with seeds 17/23/42, changing no policy, physics, score, timing, or task parameters.
+- **Result:** Refuted — best scores were 2/4/2. All rings were securely grasped, lifted from about 0.901 m to 1.099 m, transported over the carrier, and descended. Seed 23 lost three scored carrier-pin relations specifically during the 30-degree ring rotation.
+- **Fix:** Do not seed-select and do not alter the demonstrated grasp target. Retain seed 23 as the most diagnostic start and isolate the collision compatibility margin.
+- **Regression status:** FAIL for Stage B. Result hashes: seed 17 `b505d5f151a6695a3e0492a297ed08a2213c5a306b34806984b114f42b53d9f3`; seed 23 `3e638010dbca67539016cd73363cdfe4710181b731b3f5976eb29027fee89496`; seed 42 `073c0cfb500a0aaef3599b706bc262680e3aeef24b483df55f81b6239f6fac16`.
+
+## ISSUE-012 — First collision compatibility patch enlarges insertion envelopes
+
+- **Symptom:** Upstream `contact_offset=0.0` is rejected by PhysX 5.1, but the first legal patch used 0.1 mm for gears and 1.0 mm for the carrier.
+- **Hypothesis:** The added carrier envelope initiates ring/stack contact before the intended seated pose and contributes to the destructive insertion rotation.
+- **Evidence:** Upstream commit `8f57e9b` deliberately changed gear rest offsets to -0.5 mm so surfaces could overlap and slide onto pins. PhysX requires a positive contact offset greater than rest offset; only a positive epsilon is needed for the negative-rest gears, and the carrier needs only an epsilon above its 0.5 mm rest offset.
+- **Experiment:** Preregistered Stage B iteration 3 reduces the compatibility margin to 1 micrometre: gear/reducer contact offset 0.000001 m and carrier contact offset 0.000501 m, with rest offsets unchanged.
+- **Result:** Pending.
+- **Fix:** Pending Stage A health regression and seed-23 oracle result.
+- **Regression status:** OPEN.

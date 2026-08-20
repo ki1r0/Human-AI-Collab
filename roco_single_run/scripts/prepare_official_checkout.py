@@ -52,23 +52,31 @@ def _patch_collision_offsets(path: Path) -> dict:
         "collision_props=sim_utils.CollisionPropertiesCfg("
         "contact_offset=0.0, rest_offset=-0.0005)"
     )
-    negative_patched = (
+    negative_previous = (
         "collision_props=sim_utils.CollisionPropertiesCfg("
         "contact_offset=0.0001, rest_offset=-0.0005)"
+    )
+    negative_patched = (
+        "collision_props=sim_utils.CollisionPropertiesCfg("
+        "contact_offset=0.000001, rest_offset=-0.0005)"
     )
     carrier_original = (
         "collision_props=sim_utils.CollisionPropertiesCfg("
         "contact_offset=0.0, rest_offset=0.0005)"
     )
-    carrier_patched = (
+    carrier_previous = (
         "collision_props=sim_utils.CollisionPropertiesCfg("
         "contact_offset=0.001, rest_offset=0.0005)"
+    )
+    carrier_patched = (
+        "collision_props=sim_utils.CollisionPropertiesCfg("
+        "contact_offset=0.000501, rest_offset=0.0005)"
     )
 
     def active_count(fragment: str) -> int:
         return len(re.findall(rf"^        {re.escape(fragment)}", source, flags=re.MULTILINE))
 
-    negative_original_count = active_count(negative_original)
+    negative_original_count = active_count(negative_original) + active_count(negative_previous)
     negative_patched_count = active_count(negative_patched)
     if negative_original_count not in (0, 3) or negative_patched_count not in (0, 3):
         raise RuntimeError(
@@ -77,8 +85,9 @@ def _patch_collision_offsets(path: Path) -> dict:
         )
     if negative_original_count == 3:
         source = source.replace(negative_original, negative_patched)
+        source = source.replace(negative_previous, negative_patched)
 
-    carrier_original_count = active_count(carrier_original)
+    carrier_original_count = active_count(carrier_original) + active_count(carrier_previous)
     carrier_patched_count = active_count(carrier_patched)
     if carrier_original_count not in (0, 1) or carrier_patched_count not in (0, 1):
         raise RuntimeError(
@@ -87,6 +96,7 @@ def _patch_collision_offsets(path: Path) -> dict:
         )
     if carrier_original_count == 1:
         source = source.replace(carrier_original, carrier_patched)
+        source = source.replace(carrier_previous, carrier_patched)
 
     if (
         len(re.findall(rf"^        {re.escape(negative_patched)}", source, flags=re.MULTILINE)) != 3
@@ -97,6 +107,9 @@ def _patch_collision_offsets(path: Path) -> dict:
     return {
         "negative_rest_assets_patched": negative_original_count,
         "carrier_assets_patched": carrier_original_count,
+        "negative_rest_contact_offset_m": 0.000001,
+        "carrier_contact_offset_m": 0.000501,
+        "legal_epsilon_above_zero_or_rest_m": 0.000001,
     }
 
 
