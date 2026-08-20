@@ -166,3 +166,28 @@ Status: **FAIL** (`max_steps`, best/final score 0/0).
   `08ef35fb...0636`.
 
 Next locked run: base candidate seed 2026, unchanged policy and runner.
+
+### Base candidate seed 2026
+
+Status: **FAIL** (`max_steps`, best/final score 0/0).
+
+- Completed the full learned contract with 590 unique hashes per camera,
+  finite arrays, exact model integrity, no done, and clean shutdown.
+- Right-arm action standard deviations were only 0.00084-0.00555 and no score
+  sample exceeded zero.
+- Independent decode verified 591 H.264 frames over 29.55 s.
+- Evidence hashes: result `429f54d1...6db1`, trace
+  `09e9927a...2aa6`, video `83534376...b660`, console
+  `d8e48b31...1a4d`.
+
+## `roco_model_act` conclusion
+
+The fixed four-seed sequence is **FAIL** with best scores `[0,0,0,0]`. Every
+episode strictly loaded the pinned model, used fresh live observations, retained
+finite full traces and 591-frame video, and shut down cleanly. Repeated
+near-static right-arm outputs across all layouts refute this checkpoint as a
+public full-task Task 1 solution under the reproduced contract.
+
+The reproduction still has no learned score-6 episode. The only remaining
+same-author public ACT repository is `_1`; it will be considered only if a
+provenance-based immutable epoch selection can be fixed before any rollout.

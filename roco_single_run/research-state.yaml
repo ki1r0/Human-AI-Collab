@@ -125,16 +125,22 @@ hypotheses:
     priority: high
   - id: H18
     statement: "The separately published yjsm1203/roco_model_act base checkpoint is architecture-compatible and can produce a broader full-task learned rollout than roco_model_act_2."
-    status: seeds_23_17_42_failed_testing_seed_2026
+    status: refuted_scores_0_0_0_0_unilateral_policy
     motivation: "Its direct model card describes training on all filtered gearbox episodes and phases after pin insertion, whereas _2 repeated a left-only first subtask over four seeds."
     parent: H17
+    priority: high
+  - id: H19
+    statement: "The author's remaining roco_model_act_1 repository exposes a provenance-based checkpoint selection that is architecture-compatible and behaviorally distinct enough to justify one final ACT candidate gate."
+    status: investigating_public_artifacts
+    motivation: "Both available policy_best checkpoints are empirically unilateral; _1 is the only remaining same-author public ACT repository, but its epoch files require a selection rule fixed before rollout."
+    parent: H18
     priority: high
 
 experiments:
   proxy_metric: "Highest official environment assembly score in a live learned-policy rollout; target score >= 6 with fresh observations at every step."
   baseline_value: 1
   best_value: 1
-  total_runs: 7
+  total_runs: 8
   diagnostic_runs: 26
   trajectory:
     - run: 1
@@ -193,11 +199,19 @@ experiments:
       status: FAIL
       termination: max_steps
       checkpoint: roco_model_act
+    - run: 8
+      seed: 2026
+      steps: 590
+      best_score: 0
+      final_score: 0
+      status: FAIL
+      termination: max_steps
+      checkpoint: roco_model_act
 
 outer_loop:
-  cycle: 25
-  last_direction: "Final fixed-sequence base-candidate seed-2026 sensitivity rollout"
-  last_reflection: "Base seed 42 is the third clean score-0 run and again shows highly asymmetric action variance despite fresh camera streams. Complete the locked four-seed sequence at seed 2026; if it repeats, the base checkpoint is empirically refuted as a full-task candidate under this contract."
+  cycle: 26
+  last_direction: "Provenance and checkpoint-selection audit of remaining public roco_model_act_1 artifacts"
+  last_reflection: "The base candidate completed four clean seeds at [0,0,0,0] with repeated near-static right-arm outputs, so layout sensitivity is refuted. Inspect the only remaining same-author ACT repository and admit a candidate only if an immutable, non-outcome-based epoch selection rule and complete matching stats can be fixed before any rollout."
 
 workspace:
   findings: "findings.md"
