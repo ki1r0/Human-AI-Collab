@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from Galaxea_Lab_External.VLA.ACT.act.policy import ACTPolicy
+from act.policy import ACTPolicy
 
 
 CHECKPOINT_SHA256 = "a2d0aa42ec1d39609637a40ac09b420ebc16335a199807ae42e2edff2bfce2b1"

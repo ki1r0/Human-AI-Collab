@@ -199,3 +199,13 @@
 - **Result:** Supported — the active check produced mean absolute pixel changes of 5.18 (head), 35.14 (left wrist), and 22.01 (right wrist), while the saved canonical package remained pre-perturbation.
 - **Fix:** Add an active, diagnostic-only freshness perturbation; keep it outside all policy input and rollout paths.
 - **Regression status:** PASS in Stage C.
+
+## ISSUE-021 — Top-level Galaxea import requires a running Kit app
+
+- **Symptom:** The first policy-only launch failed before checkpoint construction with `ModuleNotFoundError: omni.physics`.
+- **Hypothesis:** Importing `Galaxea_Lab_External.VLA...` executes the package root, which eagerly imports task/environment modules that require Isaac Sim, even though ACT itself is standalone PyTorch.
+- **Evidence:** The traceback enters `Galaxea_Lab_External/__init__.py -> tasks -> isaaclab.assets` before reaching ACT policy code.
+- **Experiment:** Put the official checkout's `VLA/ACT` directory on `PYTHONPATH` and import the exact official `act.policy.ACTPolicy` module directly.
+- **Result:** Pending.
+- **Fix:** Use the direct official ACT subpackage in policy-only and learned-runner processes; environment imports remain after `AppLauncher` in simulator processes.
+- **Regression status:** OPEN.
