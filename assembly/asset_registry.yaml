@@ -1,0 +1,1255 @@
+# Asset Registry — I2R Gearbox Assembly
+# Single source of truth for part names, prim paths, initial poses,
+# plug/socket topology, and grasp metadata.
+#
+# Conventions:
+#   prim_path    : USD path when the part is unassembled (root of /World).
+#                  After assembly the part is reparented; use _find_prim_path()
+#                  by name rather than hard-coding the assembled path.
+#   category     : floor  = large part placed near floor (z ≈ 0.02 m world)
+#                  table  = small part placed on workbench (tabletop z ≈ -0.1 m world)
+#                  assembled = starts pre-assembled; no standalone scatter pose
+#   plugs        : Xform children on this part used when it attaches AS A CHILD
+#   sockets      : Xform children on this part where other parts attach TO IT
+#   parent_connection : canonical parent in the assembly sequence (null = root)
+#   grasp_hints  : authored grasp frames (to be populated in Phase 1E);
+#                  empty list = auto-generate from geometry_hint at runtime
+#   placement    : tools/scatter_parts.py is authoritative for actual spawn pose;
+#                  initial_pose/category below are documentation only and may lag it.
+
+meta:
+  version: "1.0"
+  date: "2026-04-17"
+  scene: assets/simple_room_scene.usd
+  world_root: /Root   # scene default prim (was /World — incorrect)
+  table_z: -0.1     # workbench tabletop surface Z (world metres); mesh top ≈ -0.091
+  floor_z: 0.02     # floor-level scatter Z
+  spawn_margin: 0.005  # clearance above surface when fixing hover bug
+
+# ---------------------------------------------------------------------------
+# STRUCTURAL CASINGS
+# ---------------------------------------------------------------------------
+
+parts:
+
+  - name: Casing_Base
+    prim_path: /World/Casing_Base
+    manipulable: true          # too large/heavy for single-arm grasp; fixture
+    role: structure
+    geometry_hint: box
+    initial_pose:
+      position: [-1.80, 1.50, 0.02]
+      rotation_euler: [0, 0, 0]
+      category: floor
+    plugs: []                   # root part; never attaches as a child
+    sockets:
+      - socket_gear_input       # receives Input_Shaft
+      - socket_gear_transfer    # receives Transfer_Shaft
+      - socket_gear_output      # receives Output_Shaft
+      - socket_hub_output       # receives Hub_Cover_Output_Base
+      - socket_hub_small_1      # receives Hub_Cover_Small_Base_01
+      - socket_hub_small_2      # receives Hub_Cover_Small_Base_02
+      - socket_casing_mate      # receives Casing_Top (plug_casing_mate)
+      # - socket_bolt_casing_1
+      # - socket_bolt_casing_2
+      # - socket_bolt_casing_3
+      # - socket_bolt_casing_4
+      # - socket_bolt_casing_5
+      # - socket_bolt_casing_6
+      - socket_bolt_hub_1
+      - socket_bolt_hub_2
+      - socket_bolt_hub_3
+      - socket_bolt_hub_4
+      - socket_bolt_hub_5
+      - socket_bolt_hub_6
+      - socket_bolt_hub_7
+      - socket_bolt_hub_8
+      - socket_bolt_hub_9
+      - socket_bolt_hub_10
+      - socket_bolt_hub_11
+      - socket_bolt_hub_12
+      - socket_oil_1
+      - socket_oil_2
+      - socket_breather
+    parent_connection: null
+    grasp_hints: []
+    notes: "Assembly root. Fixed on workbench; not robot-manipulated."
+
+  - name: Casing_Top
+    prim_path: /World/Casing_Top
+    manipulable: true
+    role: structure
+    geometry_hint: box
+    initial_pose:
+      position: [1.80, 1.50, 0.02]
+      rotation_euler: [0, 0, 0]
+      category: floor
+    plugs:
+      - plug_casing_mate        # mates into Casing_Base/socket_casing_mate
+    sockets:
+      - socket_hub_output       # receives Hub_Cover_Output_Top
+      - socket_hub_input        # receives Hub_Cover_Input_Top
+      - socket_hub_small        # receives Hub_Cover_Small_Top
+      - socket_bolt_casing_1
+      - socket_bolt_casing_2
+      - socket_bolt_casing_3
+      - socket_bolt_casing_4
+      - socket_bolt_casing_5
+      - socket_bolt_casing_6
+      - socket_bolt_hub_1
+      - socket_bolt_hub_2
+      - socket_bolt_hub_3
+      - socket_bolt_hub_4
+      - socket_bolt_hub_5
+      - socket_bolt_hub_6
+      - socket_bolt_hub_7
+      - socket_bolt_hub_8
+      - socket_bolt_hub_9
+      - socket_bolt_hub_10
+      - socket_bolt_hub_11
+      - socket_bolt_hub_12
+    parent_connection:
+      parent: Casing_Base
+      plug: plug_casing_mate
+      socket: socket_casing_mate
+    grasp_hints: []
+    notes: "Mated onto Casing_Base after all base-side parts are installed. Needs flip (180 deg Z) before mating — see /flip_casing_base command."
+
+# ---------------------------------------------------------------------------
+# SHAFTS  (first physical robot target: Input_Shaft)
+# ---------------------------------------------------------------------------
+
+  - name: Input_Shaft
+    prim_path: /World/Input_Shaft
+    manipulable: true
+    role: shaft
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.80, 0.00, 0.02]
+      rotation_euler: [90, 0, 0]
+      category: floor
+    plugs:
+      - plug_main
+    sockets:
+      - socket_gear             # receives bearings and/or gear
+    parent_connection:
+      parent: Casing_Base
+      plug: plug_main
+      socket: socket_gear_input
+    kinematic_offset:           # Z offset applied during combine (from magic_assembly)
+      z: -74.9                  # local units; see MagicAssemblyManager._Z_OVERRIDE
+    grasp_hints: []
+    notes: >
+      FIRST ROBOT TARGET (Phase 1D). Cylindrical geometry, clear vertical
+      grasp axis. Top grasp above centroid is the primary candidate.
+      Insertion axis aligns with socket_gear_input on Casing_Base.
+
+  - name: Transfer_Shaft
+    prim_path: /World/Transfer_Shaft
+    manipulable: true
+    role: shaft
+    geometry_hint: cylinder
+    initial_pose:
+      position: [0.00, 1.80, 0.02]
+      rotation_euler: [0, 90, 0]
+      category: floor
+    plugs:
+      - plug_main
+    sockets:
+      - socket_gear
+    parent_connection:
+      parent: Casing_Base
+      plug: plug_main
+      socket: socket_gear_transfer
+    kinematic_offset:
+      z: -27.0
+    grasp_hints: []
+
+  - name: Output_Shaft
+    prim_path: /World/Output_Shaft
+    manipulable: true
+    role: shaft
+    geometry_hint: cylinder
+    initial_pose:
+      position: [1.80, 0.00, 0.02]
+      rotation_euler: [90, 0, 0]
+      category: floor
+    plugs:
+      - plug_main
+    sockets:
+      - socket_gear
+    parent_connection:
+      parent: Casing_Base
+      plug: plug_main
+      socket: socket_gear_output
+    kinematic_offset:
+      z: -18.32
+    grasp_hints: []
+
+# ---------------------------------------------------------------------------
+# GEARS
+# ---------------------------------------------------------------------------
+
+  - name: Transfer_Gear
+    prim_path: /World/Transfer_Gear
+    manipulable: false          # pre-assembled; not a robot manipulation target
+    role: gear
+    geometry_hint: disc
+    initial_pose:
+      position: null            # starts pre-assembled onto Transfer_Shaft
+      rotation_euler: [0, 0, 0]
+      category: assembled
+    plugs:
+      - plug_main
+    sockets: []
+    parent_connection:
+      parent: Transfer_Shaft
+      plug: plug_main
+      socket: socket_gear
+    kinematic_offset:           # transform override from MagicAssemblyManager
+      translate: [22.1, 0.0, 0.0]
+      rotate_euler: [0.0, 90.0, 0.0]
+    grasp_hints: []
+    notes: "CONFIRMED pre-assembled onto Transfer_Shaft at scene load (per docs/Basic_assembly sequence.md). Fixed initial condition. Not part of assembly sequence."
+
+  - name: Output_Gear
+    prim_path: /World/Output_Gear
+    manipulable: false
+    role: gear
+    geometry_hint: disc
+    initial_pose:
+      position: null
+      rotation_euler: [0, 0, 0]
+      category: assembled
+    plugs:
+      - plug_main
+    sockets: []
+    parent_connection:
+      parent: Output_Shaft
+      plug: plug_main
+      socket: socket_gear
+    kinematic_offset:
+      translate: [0.0, 15.5, 0.0]
+      rotate_euler: [-90.0, 0.0, 0.0]
+    grasp_hints: []
+    notes: "CONFIRMED pre-assembled onto Output_Shaft at scene load (per docs/Basic_assembly sequence.md). Fixed initial condition. Not part of assembly sequence."
+
+# ---------------------------------------------------------------------------
+# BEARINGS  (no scatter position — verify actual prim location at runtime)
+# ---------------------------------------------------------------------------
+
+  - name: Bearing_Input_Bottom
+    prim_path: /World/Bearing_Input_Bottom
+    manipulable: false          # pre-assembled; not a robot manipulation target
+    role: bearing
+    geometry_hint: cylinder
+    initial_pose:
+      position: null            # no standalone scatter pose; starts assembled
+      rotation_euler: [0, 0, 0]
+      category: assembled
+    plugs:
+      - plug_main
+    sockets: []
+    parent_connection:
+      parent: Input_Shaft
+      plug: plug_main
+      socket: socket_gear
+    kinematic_offset:
+      z: -100.75
+    grasp_hints: []
+    notes: "CONFIRMED pre-assembled onto Input_Shaft at scene load. Fixed initial condition. Not part of assembly sequence."
+
+  - name: Bearing_Input_Top
+    prim_path: /World/Bearing_Input_Top
+    manipulable: false
+    role: bearing
+    geometry_hint: cylinder
+    initial_pose:
+      position: null
+      category: assembled
+    plugs:
+      - plug_main
+    sockets: []
+    parent_connection:
+      parent: Input_Shaft
+      plug: plug_main
+      socket: socket_gear
+    kinematic_offset:
+      z: 2.732481
+    grasp_hints: []
+    notes: "CONFIRMED pre-assembled onto Input_Shaft at scene load. Fixed initial condition. Not part of assembly sequence."
+
+  - name: Bearing_Transfer
+    prim_path: /World/Bearing_Transfer
+    manipulable: false
+    role: bearing
+    geometry_hint: cylinder
+    initial_pose:
+      position: null
+      category: assembled
+    plugs:
+      - plug_main
+    sockets: []
+    parent_connection:
+      parent: Transfer_Shaft
+      plug: plug_main
+      socket: socket_gear
+    grasp_hints: []
+    notes: "CONFIRMED pre-assembled onto Transfer_Shaft at scene load. Fixed initial condition. Not part of assembly sequence."
+
+  - name: Bearing_Output_Top
+    prim_path: /World/Bearing_Output_Top
+    manipulable: false
+    role: bearing
+    geometry_hint: cylinder
+    initial_pose:
+      position: null
+      category: assembled
+    plugs:
+      - plug_main
+    sockets: []
+    parent_connection:
+      parent: Output_Shaft
+      plug: plug_main
+      socket: socket_gear
+    grasp_hints: []
+    notes: "CONFIRMED pre-assembled onto Output_Shaft at scene load. Fixed initial condition. Not part of assembly sequence."
+
+  - name: Bearing_Output_Bottom
+    prim_path: /World/Bearing_Output_Bottom
+    manipulable: false
+    role: bearing
+    geometry_hint: cylinder
+    initial_pose:
+      position: null
+      category: assembled
+    plugs:
+      - plug_main
+    sockets: []
+    parent_connection:
+      parent: Output_Shaft
+      plug: plug_main
+      socket: socket_gear
+    grasp_hints: []
+    notes: "CONFIRMED pre-assembled onto Output_Shaft at scene load. Fixed initial condition. Not part of assembly sequence."
+
+# ---------------------------------------------------------------------------
+# HUB COVERS — BASE SIDE
+# ---------------------------------------------------------------------------
+
+  - name: Hub_Cover_Output_Base
+    prim_path: /World/Hub_Cover_Output_Base
+    alternate_names: [Hub_Cover_Output]   # ui.py uses either name interchangeably
+    manipulable: true
+    role: cover
+    geometry_hint: cylinder
+    initial_pose:
+      position: [1.80, -1.50, 0.02]      # shared with Hub_Cover_Output scatter entry
+      rotation_euler: [0, 0, 0]
+      category: floor
+    plugs:
+      - plug_main
+    sockets: []
+    parent_connection:
+      parent: Casing_Base
+      plug: plug_main
+      socket: socket_hub_output
+    kinematic_offset:
+      position_local: [9.3e-17, 43.42, 31.0]
+    grasp_hints: []
+
+  - name: Hub_Cover_Small_Base_01
+    prim_path: /World/Hub_Cover_Small_Base_01
+    alternate_names: [Hub_Cover_Small]    # scatter name; ui.py may use either
+    manipulable: true
+    role: cover
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.00, -1.50, 0.02]     # shared with Hub_Cover_Small scatter entry
+      rotation_euler: [0, 0, 0]
+      category: floor
+    plugs:
+      - plug_main
+    sockets: []
+    parent_connection:
+      parent: Casing_Base
+      plug: plug_main
+      socket: socket_hub_small_1
+    kinematic_offset:
+      position_local: [35.9, -55.0, 30.6]
+    grasp_hints: []
+
+  - name: Hub_Cover_Small_Base_02
+    prim_path: /World/Hub_Cover_Small_Base_02
+    manipulable: true
+    role: cover
+    geometry_hint: cylinder
+    initial_pose:
+      position: null                      # prim confirmed to exist; scatter position TBD
+      rotation_euler: [0, 0, 0]
+      category: floor
+    plugs:
+      - plug_main
+    sockets: []
+    parent_connection:
+      parent: Casing_Base
+      plug: plug_main
+      socket: socket_hub_small_2
+    kinematic_offset:
+      position_local: [-36.3, -54.6, 30.6]
+    grasp_hints: []
+    notes: "Prim confirmed present in scene. No explicit scatter_parts.py entry — initial position needs to be set (likely share area with Hub_Cover_Small_Base_01)."
+
+# ---------------------------------------------------------------------------
+# HUB COVERS — TOP SIDE
+# ---------------------------------------------------------------------------
+
+  - name: Hub_Cover_Output_Top
+    prim_path: /World/Hub_Cover_Output_Top
+    alternate_names: [Hub_Cover_Output]
+    manipulable: true
+    role: cover
+    geometry_hint: cylinder
+    initial_pose:
+      position: [1.80, -1.50, 0.02]
+      rotation_euler: [0, 0, 0]
+      category: floor
+    plugs:
+      - plug_main
+    sockets: []
+    parent_connection:
+      parent: Casing_Top
+      plug: plug_main
+      socket: socket_hub_output
+    kinematic_offset:
+      position_local: [9.3e-17, 43.42, 31.0]
+    grasp_hints: []
+    notes: "Alternate name Hub_Cover_Output used by ui.py. Same physical part shape as base-side variant."
+
+  - name: Hub_Cover_Input_Top
+    prim_path: /World/Hub_Cover_Input   # scene prim is 'Hub_Cover_Input' (no _Top); canonical name keeps _Top for sibling consistency
+    alternate_names: [Hub_Cover_Input]
+    manipulable: true
+    role: cover
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.80, -1.50, 0.02]     # shared with Hub_Cover_Input scatter entry
+      rotation_euler: [0, 0, 0]
+      category: floor
+    plugs:
+      - plug_main
+    sockets: []
+    parent_connection:
+      parent: Casing_Top
+      plug: plug_main
+      socket: socket_hub_input
+    kinematic_offset:
+      position_local: [35.91, -54.98, 31.8]
+    grasp_hints: []
+
+  - name: Hub_Cover_Small_Top
+    prim_path: /World/Hub_Cover_Small_Top
+    alternate_names: [Hub_Cover_Small]
+    manipulable: true
+    role: cover
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.00, -1.50, 0.02]
+      rotation_euler: [0, 0, 0]
+      category: floor
+    plugs:
+      - plug_main
+    sockets: []
+    parent_connection:
+      parent: Casing_Top
+      plug: plug_main
+      socket: socket_hub_small
+    kinematic_offset:
+      position_local: [-36.3, -54.6, 30.7]
+    grasp_hints: []
+
+# ---------------------------------------------------------------------------
+# M10 CASING BOLTS  (6 bolts, _01 through _06)
+# Parent is Casing_Base (sockets socket_bolt_casing_1..6). All 6 have distinct
+# scatter entries in tools/scatter_parts.py (authoritative for placement).
+# ---------------------------------------------------------------------------
+
+  - name: M10_Casing_Bolt_01
+    prim_path: /World/M10_Casing_Bolt_01
+    alternate_names: [M10_Casing_Bolt]
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-0.40, -0.50, 2.40]     # scatter entry for M10_Casing_Bolt
+      rotation_euler: [0, 0, 0]
+      category: table
+    plugs:
+      - plug_main
+    sockets:
+      - socket_main               # M10_Casing_Nut threads onto this bolt
+    parent_connection:
+      parent: Casing_Top
+      plug: plug_main
+      socket: socket_bolt_casing_1
+    kinematic_offset:
+      z: -31.6
+    grasp_hints: []
+
+  - name: M10_Casing_Bolt_02
+    prim_path: /World/M10_Casing_Bolt_02
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [0.40, 0.50, 2.40]       # scatter entry for M10_Casing_Bolt_01
+      rotation_euler: [0, 0, 0]
+      category: table
+    plugs: [plug_main]
+    sockets: [socket_main]
+    parent_connection:
+      parent: Casing_Top
+      plug: plug_main
+      socket: socket_bolt_casing_2
+    kinematic_offset:
+      z: -31.6
+    grasp_hints: []
+
+  - name: M10_Casing_Bolt_03
+    prim_path: /World/M10_Casing_Bolt_03
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: null                      # no scatter entry; verify at runtime
+      category: table
+    plugs: [plug_main]
+    sockets: [socket_main]
+    parent_connection:
+      parent: Casing_Top
+      plug: plug_main
+      socket: socket_bolt_casing_3
+    kinematic_offset:
+      z: -31.6
+    grasp_hints: []
+
+  - name: M10_Casing_Bolt_04
+    prim_path: /World/M10_Casing_Bolt_04
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: null
+      category: table
+    plugs: [plug_main]
+    sockets: [socket_main]
+    parent_connection:
+      parent: Casing_Top
+      plug: plug_main
+      socket: socket_bolt_casing_4
+    kinematic_offset:
+      z: -31.6
+    grasp_hints: []
+
+  - name: M10_Casing_Bolt_05
+    prim_path: /World/M10_Casing_Bolt_05
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: null
+      category: table
+    plugs: [plug_main]
+    sockets: [socket_main]
+    parent_connection:
+      parent: Casing_Top
+      plug: plug_main
+      socket: socket_bolt_casing_5
+    kinematic_offset:
+      z: -31.6
+    grasp_hints: []
+
+  - name: M10_Casing_Bolt_06
+    prim_path: /World/M10_Casing_Bolt_06
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: null
+      category: table
+    plugs: [plug_main]
+    sockets: [socket_main]
+    parent_connection:
+      parent: Casing_Top
+      plug: plug_main
+      socket: socket_bolt_casing_6
+    kinematic_offset:
+      z: -31.6
+    grasp_hints: []
+
+# ---------------------------------------------------------------------------
+# M10 CASING NUTS  (6 nuts, _01 through _06)
+# ---------------------------------------------------------------------------
+
+  - name: M10_Casing_Nut_01
+    prim_path: /World/M10_Casing_Nut_01
+    alternate_names: [M10_Casing_Nut]
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [0.00, -1.80, 0.02]      # scatter entry for M10_Casing_Nut
+      rotation_euler: [0, 0, 0]
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: M10_Casing_Bolt_01
+      plug: plug_main
+      socket: null                        # no named socket; seats by position
+    kinematic_offset:
+      position_local: [0.0, -47.598, 0.0]
+    grasp_hints: []
+
+  - name: M10_Casing_Nut_02
+    prim_path: /World/M10_Casing_Nut_02
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: null
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: M10_Casing_Bolt_02
+      plug: plug_main
+      socket: null
+    kinematic_offset:
+      position_local: [0.0, -47.598, 0.0]
+    grasp_hints: []
+
+  - name: M10_Casing_Nut_03
+    prim_path: /World/M10_Casing_Nut_03
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: null
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: M10_Casing_Bolt_03
+      plug: plug_main
+      socket: null
+    kinematic_offset:
+      position_local: [0.0, -47.598, 0.0]
+    grasp_hints: []
+
+  - name: M10_Casing_Nut_04
+    prim_path: /World/M10_Casing_Nut_04
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: null
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: M10_Casing_Bolt_04
+      plug: plug_main
+      socket: null
+    kinematic_offset:
+      position_local: [0.0, -47.598, 0.0]
+    grasp_hints: []
+
+  - name: M10_Casing_Nut_05
+    prim_path: /World/M10_Casing_Nut_05
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: null
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: M10_Casing_Bolt_05
+      plug: plug_main
+      socket: null
+    kinematic_offset:
+      position_local: [0.0, -47.598, 0.0]
+    grasp_hints: []
+
+  - name: M10_Casing_Nut_06
+    prim_path: /World/M10_Casing_Nut_06
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: null
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: M10_Casing_Bolt_06
+      plug: plug_main
+      socket: null
+    kinematic_offset:
+      position_local: [0.0, -47.598, 0.0]
+    grasp_hints: []
+
+# ---------------------------------------------------------------------------
+# M6 HUB BOLTS  (12 bolts at socket indices 1-12)
+# ---------------------------------------------------------------------------
+# Scene prim names use `_base` (01..12) and `_top` (01..12) suffixes — these
+# are declared as `alternate_names` so the runtime's registry-aware
+# _find_prim_path fallback resolves canonical name → scene prim.
+
+  - name: M6_Hub_Bolt_01_base
+    prim_path: /World/M6_Hub_Bolt_01_base
+    alternate_names: [M6_Hub_Bolt_01_Base]
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.00, 0.80, 0.02]      # all M6 bolts share this scatter position (stacked)
+      rotation_euler: [0, 0, 0]
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Base
+      plug: plug_main
+      socket: socket_bolt_hub_1
+    kinematic_offset:
+      z: 29.2
+    grasp_hints: []
+    notes: >
+      Hub bolt for socket_bolt_hub_1. 12 managed bolts per half (M6_Hub_Bolt_01..12):
+      _base -> Casing_Base, _top -> Casing_Top; 24 total, all identical/interchangeable.
+      Convention: 4 bolts per hub cover x 3 covers = 12 per half (the bolt->cover
+      grouping is procedural knowledge, defined in the assembly DAG, not here).
+      NOTE: the scene also contains stray M6_Hub_Bolt_13_base / _13_top prims that are
+      outside the 12-per-half set and are intentionally unmanaged.
+
+  - name: M6_Hub_Bolt_02_base
+    prim_path: /World/M6_Hub_Bolt_02_base
+    alternate_names: [M6_Hub_Bolt_02_Base]
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.00, 0.80, 0.02]
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Base
+      plug: plug_main
+      socket: socket_bolt_hub_2
+    kinematic_offset:
+      z: 29.2
+    grasp_hints: []
+
+  - name: M6_Hub_Bolt_03_base
+    prim_path: /World/M6_Hub_Bolt_03_base
+    alternate_names: [M6_Hub_Bolt_03_Base]
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.00, 0.80, 0.02]
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Base
+      plug: plug_main
+      socket: socket_bolt_hub_3
+    kinematic_offset:
+      z: 29.2
+    grasp_hints: []
+
+  - name: M6_Hub_Bolt_04_base
+    prim_path: /World/M6_Hub_Bolt_04_base
+    alternate_names: [M6_Hub_Bolt_04_Base]
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.00, 0.80, 0.02]
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Base
+      plug: plug_main
+      socket: socket_bolt_hub_4
+    kinematic_offset:
+      z: 29.2
+    grasp_hints: []
+
+  - name: M6_Hub_Bolt_05_base
+    prim_path: /World/M6_Hub_Bolt_05_base
+    alternate_names: [M6_Hub_Bolt_05_Base]
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.00, 0.80, 0.02]
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Base
+      plug: plug_main
+      socket: socket_bolt_hub_5
+    kinematic_offset:
+      z: 29.2
+    grasp_hints: []
+
+  - name: M6_Hub_Bolt_06_base
+    prim_path: /World/M6_Hub_Bolt_06_base
+    alternate_names: [M6_Hub_Bolt_06_Base]
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.00, 0.80, 0.02]
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Base
+      plug: plug_main
+      socket: socket_bolt_hub_6
+    kinematic_offset:
+      z: 29.2
+    grasp_hints: []
+
+  - name: M6_Hub_Bolt_07_base
+    prim_path: /World/M6_Hub_Bolt_07_base
+    alternate_names: [M6_Hub_Bolt_07_Base]
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.00, 0.80, 0.02]
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Base
+      plug: plug_main
+      socket: socket_bolt_hub_7
+    kinematic_offset:
+      z: 29.2
+    grasp_hints: []
+
+  - name: M6_Hub_Bolt_08_base
+    prim_path: /World/M6_Hub_Bolt_08_base
+    alternate_names: [M6_Hub_Bolt_08_Base]
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.00, 0.80, 0.02]
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Base
+      plug: plug_main
+      socket: socket_bolt_hub_8
+    kinematic_offset:
+      z: 29.2
+    grasp_hints: []
+
+  - name: M6_Hub_Bolt_09_base
+    prim_path: /World/M6_Hub_Bolt_09_base
+    alternate_names: [M6_Hub_Bolt_09_Base]
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.00, 0.80, 0.02]
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Base
+      plug: plug_main
+      socket: socket_bolt_hub_9
+    kinematic_offset:
+      z: 29.2
+    grasp_hints: []
+
+  - name: M6_Hub_Bolt_10_base
+    prim_path: /World/M6_Hub_Bolt_10_base
+    alternate_names: [M6_Hub_Bolt_10_Base]
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.00, 0.80, 0.02]
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Base
+      plug: plug_main
+      socket: socket_bolt_hub_10
+    kinematic_offset:
+      z: 29.2
+    grasp_hints: []
+
+  - name: M6_Hub_Bolt_11_base
+    prim_path: /World/M6_Hub_Bolt_11_base
+    alternate_names: [M6_Hub_Bolt_11_Base]
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.00, 0.80, 0.02]
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Base
+      plug: plug_main
+      socket: socket_bolt_hub_11
+    kinematic_offset:
+      z: 29.2
+    grasp_hints: []
+
+  - name: M6_Hub_Bolt_12_base
+    prim_path: /World/M6_Hub_Bolt_12_base
+    alternate_names: [M6_Hub_Bolt_12_Base]
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.00, 0.80, 0.02]
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Base
+      plug: plug_main
+      socket: socket_bolt_hub_12
+    kinematic_offset:
+      z: 29.2
+    grasp_hints: []
+
+
+
+  - name: M6_Hub_Bolt_01_top
+    prim_path: /World/M6_Hub_Bolt_01_top
+    alternate_names: [M6_Hub_Bolt_01_Top]
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.00, 0.80, 0.02]      # all M6 bolts share this scatter position (stacked)
+      rotation_euler: [0, 0, 0]
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Top
+      plug: plug_main
+      socket: socket_bolt_hub_1
+    kinematic_offset:
+      z: 29.2
+    grasp_hints: []
+
+  - name: M6_Hub_Bolt_02_top
+    prim_path: /World/M6_Hub_Bolt_02_top
+    alternate_names: [M6_Hub_Bolt_02_Top]
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.00, 0.80, 0.02]
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Top
+      plug: plug_main
+      socket: socket_bolt_hub_2
+    kinematic_offset:
+      z: 29.2
+    grasp_hints: []
+
+  - name: M6_Hub_Bolt_03_top
+    prim_path: /World/M6_Hub_Bolt_03_top
+    alternate_names: [M6_Hub_Bolt_03_Top]
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.00, 0.80, 0.02]
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Top
+      plug: plug_main
+      socket: socket_bolt_hub_3
+    kinematic_offset:
+      z: 29.2
+    grasp_hints: []
+
+  - name: M6_Hub_Bolt_04_top
+    prim_path: /World/M6_Hub_Bolt_04_top
+    alternate_names: [M6_Hub_Bolt_04_Top]
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.00, 0.80, 0.02]
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Top
+      plug: plug_main
+      socket: socket_bolt_hub_4
+    kinematic_offset:
+      z: 29.2
+    grasp_hints: []
+
+  - name: M6_Hub_Bolt_05_top
+    prim_path: /World/M6_Hub_Bolt_05_top
+    alternate_names: [M6_Hub_Bolt_05_Top]
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.00, 0.80, 0.02]
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Top
+      plug: plug_main
+      socket: socket_bolt_hub_5
+    kinematic_offset:
+      z: 29.2
+    grasp_hints: []
+
+  - name: M6_Hub_Bolt_06_top
+    prim_path: /World/M6_Hub_Bolt_06_top
+    alternate_names: [M6_Hub_Bolt_06_Top]
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.00, 0.80, 0.02]
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Top
+      plug: plug_main
+      socket: socket_bolt_hub_6
+    kinematic_offset:
+      z: 29.2
+    grasp_hints: []
+
+  - name: M6_Hub_Bolt_07_top
+    prim_path: /World/M6_Hub_Bolt_07_top
+    alternate_names: [M6_Hub_Bolt_07_Top]
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.00, 0.80, 0.02]
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Top
+      plug: plug_main
+      socket: socket_bolt_hub_7
+    kinematic_offset:
+      z: 29.2
+    grasp_hints: []
+
+  - name: M6_Hub_Bolt_08_top
+    prim_path: /World/M6_Hub_Bolt_08_top
+    alternate_names: [M6_Hub_Bolt_08_Top]
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.00, 0.80, 0.02]
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Top
+      plug: plug_main
+      socket: socket_bolt_hub_8
+    kinematic_offset:
+      z: 29.2
+    grasp_hints: []
+
+  - name: M6_Hub_Bolt_09_top
+    prim_path: /World/M6_Hub_Bolt_09_top
+    alternate_names: [M6_Hub_Bolt_09_Top]
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.00, 0.80, 0.02]
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Top
+      plug: plug_main
+      socket: socket_bolt_hub_9
+    kinematic_offset:
+      z: 29.2
+    grasp_hints: []
+
+  - name: M6_Hub_Bolt_10_top
+    prim_path: /World/M6_Hub_Bolt_10_top
+    alternate_names: [M6_Hub_Bolt_10_Top]
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.00, 0.80, 0.02]
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Top
+      plug: plug_main
+      socket: socket_bolt_hub_10
+    kinematic_offset:
+      z: 29.2
+    grasp_hints: []
+
+  - name: M6_Hub_Bolt_11_top
+    prim_path: /World/M6_Hub_Bolt_11_top
+    alternate_names: [M6_Hub_Bolt_11_Top]
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.00, 0.80, 0.02]
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Top
+      plug: plug_main
+      socket: socket_bolt_hub_11
+    kinematic_offset:
+      z: 29.2
+    grasp_hints: []
+
+  - name: M6_Hub_Bolt_12_top
+    prim_path: /World/M6_Hub_Bolt_12_top
+    alternate_names: [M6_Hub_Bolt_12_Top]
+    manipulable: true
+    role: fastener
+    geometry_hint: cylinder
+    initial_pose:
+      position: [-1.00, 0.80, 0.02]
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Top
+      plug: plug_main
+      socket: socket_bolt_hub_12
+    kinematic_offset:
+      z: 29.2
+    grasp_hints: []
+# ---------------------------------------------------------------------------
+# ACCESSORIES
+# ---------------------------------------------------------------------------
+
+  - name: Oil_Level_Indicator_01
+    prim_path: /World/Oil_Level_Indicator_01
+    manipulable: true
+    role: accessory
+    geometry_hint: cylinder
+    initial_pose:
+      position: [0.00, 0.00, 2.40]
+      rotation_euler: [0, 0, 0]
+      category: table
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Base
+      plug: plug_main
+      socket: socket_oil_1
+    grasp_hints: []
+
+  - name: Oil_Level_Indicator_02
+    prim_path: /World/Oil_Level_Indicator_02
+    manipulable: true
+    role: accessory
+    geometry_hint: cylinder
+    initial_pose:
+      position: null                      # prim confirmed to exist; scatter position TBD
+      category: table
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Base
+      plug: plug_main
+      socket: socket_oil_2
+    grasp_hints: []
+    notes: "Prim confirmed present in scene. No explicit scatter_parts.py entry — initial position needs to be set."
+
+  - name: Breather_Plug
+    prim_path: /World/Breather_Plug
+    manipulable: true
+    role: accessory
+    geometry_hint: cylinder
+    initial_pose:
+      position: [1.00, -0.80, 0.02]
+      rotation_euler: [0, 0, 0]
+      category: floor
+    plugs: [plug_main]
+    sockets: []
+    parent_connection:
+      parent: Casing_Base
+      plug: plug_main
+      socket: socket_breather
+    grasp_hints: []
+
+# ---------------------------------------------------------------------------
+# KNOWN ISSUES / TODO
+# ---------------------------------------------------------------------------
+# RESOLVED:
+#   - Bearings (Bearing_*): confirmed pre-assembled at scene load. Fixed initial
+#     condition. Not part of the assembly sequence. manipulable set to false.
+#   - Hub_Cover_Small_Base_02 and Oil_Level_Indicator_02: confirmed present in scene.
+#   - M6 hub bolts: 12 managed prims per half (01..12). _base attach to Casing_Base,
+#     _top attach to Casing_Top (4 bolts per hub cover x 3 covers = 12 per half).
+#   - Scatter positions assigned for all managed parts (M6 bolts spread; M10 bolts
+#     01..06; M10 nuts 01..06; Hub_Cover_Small_Base_02; Oil_Level_Indicator_02).
+#   - Hub_Cover_Input and Oil_Level_Indicator_01 prim_paths corrected to match the
+#     actual scene prim names (verified by inspecting simple_room_scene.usd).
+#
+# OPEN:
+#   - Scene contains stray M6_Hub_Bolt_13_base / _13_top prims (13 per side) that are
+#     outside the 12-per-half managed set. Decide: delete from scene or leave ignored.
+#   - registry initial_pose/category lag scatter_parts.py (many parts still
+#     category: floor / legacy z=2.40 while scatter places them on the table).
+#     scatter is authoritative; sync these only if something reads initial_pose.
+#   - Casing_Top still lists socket_bolt_casing_1..6, now orphaned (M10 bolts moved
+#     to Casing_Base). Harmless; remove if confirmed unused.
+#   - alternate_names entries are still used by legacy ui.py shortcut commands.
+#     Migrate to canonical names once sequence runner is the authoritative executor.

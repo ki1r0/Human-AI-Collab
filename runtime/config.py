@@ -13,7 +13,14 @@ load_runtime_env_defaults()
 MEM0_API_KEY = (os.getenv("MEM0_API_KEY") or "").strip()
 
 CAMERA_PRIM_PATH = "/Franka/head_camera"  # Copy Prim Path
-TABLE_PRIM_PATH = os.getenv("TABLE_PRIM_PATH", "/World/Table")
+# Scene default prim is /Root (not /World). The workbench is the `table_low`
+# object; hover()/surface detection descends to the tabletop mesh under it.
+TABLE_PRIM_PATH = os.getenv("TABLE_PRIM_PATH", "/Root/table_low_327")
+# Fallback surface heights (world metres) used when the table prim can't be
+# found by detection. The real tabletop mesh top measures ≈ -0.091; -0.1 is the
+# canonical value shared with tools/scatter_parts.py (TABLE_SURFACE_Z).
+TABLE_SURFACE_Z = float(os.getenv("TABLE_SURFACE_Z", "-0.1"))
+FLOOR_SURFACE_Z = float(os.getenv("FLOOR_SURFACE_Z", "0.02"))
 ROBOT_PRIM_PATH = os.getenv("ROBOT_PRIM_PATH", "").strip()  # optional: existing Franka prim path in stage
 ROBOT_PRIM_EXPR = os.getenv("ROBOT_PRIM_EXPR", "").strip()  # optional regex expression to find robot prim(s)
 

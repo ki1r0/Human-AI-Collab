@@ -1,0 +1,951 @@
+# Gearbox Assembly Sequence — Canonical Definition
+# Single source of truth for the assembly order.
+# Authoritative spec: docs/Basic_assembly sequence.md
+#
+# CONFIRMED initial conditions (not part of this sequence):
+#   - All bearings start pre-assembled onto their respective shafts.
+#   - All gears (Transfer_Gear, Output_Gear) start pre-assembled onto shafts.
+#   - Hub_Cover_Small_Base_02 and Oil_Level_Indicator_02 confirmed present in scene.
+#
+# M6 HUB BOLT SIMPLIFICATION:
+#   The real gearbox uses 4 bolts per hub cover. This sim adopts a simplified
+#   2-bolts-per-cover convention. With 6 hub covers total (3 base + 3 top),
+#   this gives 12 M6 bolts total, exactly matching the 12 M6_Hub_Bolt_* prims
+#   in the USD scene. Prim assignment:
+#     - Base side (6 bolts): M6_Hub_Bolt_01..06 → sockets bolt_hub_1..6
+#     - Top side  (6 bolts): M6_Hub_Bolt_08..14 → sockets bolt_hub_8..14
+#   These are the CANONICAL registry names. Scene prims use `_base`/`_top`
+#   suffixes; the asset_registry's `alternate_names` field maps each canonical
+#   name to its scene variant, and `_find_prim_path` resolves either form.
+#
+# ORDERING MODEL:
+# This file defines a DAG, not a linear sequence. The `preconditions` field on
+# each step is the authoritative ordering constraint. The file order is just
+# one valid topological sort — many other orderings are equally valid.
+#
+# Two organizational concepts layered on top of the DAG:
+#   - streams: parallel work tracks (e.g. base_prep ∥ top_prep). A stream
+#              groups phases that should be executed by the same agent (robot
+#              or human worker) or visualized as one timeline. Streams declare
+#              which other streams they CAN run in parallel with.
+#   - groups : interchangeable step sets within a stream. All members share
+#              the same effective preconditions.
+#
+# Schema per step:
+#   id           : unique step identifier
+#   phase        : logical grouping for UI display
+#   action       : combine | separate | focus | unfocus | flip | upright | reset | inspect
+#   child        : part being attached / moved (matches asset_registry name)
+#   parent       : part being attached to (null for focus/unfocus/upright/inspect)
+#   plug         : plug Xform on child (null if action is not combine)
+#   socket       : socket Xform on parent (null if no named socket)
+#   preconditions: list of step ids that must be completed before this step
+#   postconditions: list of assertions checked after execution
+#   human_label  : natural-language description shown in UI
+#   executor_mode: magic | robot | robot_dry_run (default: magic)
+#   notes        : implementation or sequencing notes
+
+meta:
+  version: "1.3"
+  date: "2026-05-20"
+  assembly: I2R_Gearbox
+  total_steps: 45
+  confirmed_initial_conditions:
+    - "All Bearing_* prims start pre-assembled onto their shaft (fixed, not sequenced)"
+    - "All gear prims (Transfer_Gear, Output_Gear) start pre-assembled onto shafts"
+    - "Hub_Cover_Small_Base_02 and Oil_Level_Indicator_02 prims confirmed present"
+    - "Simplified bolt convention: 2 M6 bolts per hub cover (12 prims total, 6 base + 6 top)"
+  phases:
+    - id: phase_0
+      name: "Scene Setup"
+      description: "Validate scene"
+    - id: phase_1
+      name: "Base Half Preparation"
+      description: "Focus base, install 3 base hub covers and 6 M6 hub bolts, unfocus"
+    - id: phase_2
+      name: "Top Half Preparation"
+      description: "Focus top, install 3 top hub covers and 6 M6 hub bolts, unfocus"
+    - id: phase_3
+      name: "Base Half Assembly"
+      description: "Refocus base, install 3 shaft assemblies in order output → transfer → input"
+    - id: phase_4
+      name: "Casing Mate"
+      description: "Lower and mate Casing_Top onto Casing_Base"
+    - id: phase_5
+      name: "Casing Fasteners"
+      description: "Upright base, install M10 casing bolts and nuts"
+    - id: phase_6
+      name: "Accessories"
+      description: "Install oil indicators and breather plug"
+
+  # ---------------------------------------------------------------------------
+  # PARALLEL WORK STREAMS
+  # ---------------------------------------------------------------------------
+  # A stream is a work track that can be assigned to one agent (robot OR human).
+  # Streams declare which OTHER streams they can run concurrently with.
+  # The actual ordering constraints come from each step's `preconditions`.
+  # ---------------------------------------------------------------------------
+  streams:
+    - id: setup
+      phases: [phase_0]
+      description: "Scene validation. Sequential before any parallel work."
+      can_parallel_with: []
+    - id: base_prep
+      phases: [phase_1]
+      description: "Base half preparation: install base hub covers and 6 M6 hub bolts."
+      can_parallel_with: [top_prep]
+    - id: top_prep
+      phases: [phase_2]
+      description: "Top half preparation: install top hub covers and 6 M6 hub bolts."
+      can_parallel_with: [base_prep, base_assembly]
+    - id: base_assembly
+      phases: [phase_3]
+      description: "Install shaft assemblies into Casing_Base."
+      can_parallel_with: [top_prep]
+    - id: mate
+      phases: [phase_4]
+      description: "Convergence point. Requires base_assembly and top_prep complete."
+      can_parallel_with: []
+    - id: fasteners
+      phases: [phase_5]
+      description: "Upright base, then M10 casing bolts and nuts."
+      can_parallel_with: [accessories]
+    - id: accessories
+      phases: [phase_6]
+      description: "Oil indicators and breather plug."
+      can_parallel_with: [fasteners]
+
+# ---------------------------------------------------------------------------
+# INTERCHANGEABLE GROUPS
+# ---------------------------------------------------------------------------
+# Groups list steps whose internal ordering is arbitrary. Within a group:
+#   - All members share the same effective preconditions.
+#   - The runner may execute them in any order, in batches, or in parallel.
+# Use `/run_group('id')` to execute all ready members of a group.
+#
+# Note: base_shafts (phase_3) is NOT a group — the spec specifies a fixed
+# order: output → transfer → input.
+# ---------------------------------------------------------------------------
+groups:
+  - id: base_hub_covers
+    description: "Three hub covers on Casing_Base — any order"
+    stream: base_prep
+    members:
+      - step_03_hub_cover_output_base
+      - step_04_hub_cover_small_base_01
+      - step_05_hub_cover_small_base_02
+
+  - id: base_m6_hub_bolts
+    description: "6 M6 hub bolts on Casing_Base (2 per cover) — any order"
+    stream: base_prep
+    members:
+      - step_06_m6_bolt_base_01
+      - step_07_m6_bolt_base_10
+      - step_08_m6_bolt_base_13
+      - step_09_m6_bolt_base_04
+      - step_10_m6_bolt_base_05
+      - step_11_m6_bolt_base_06
+
+  - id: top_hub_covers
+    description: "Three hub covers on Casing_Top — any order"
+    stream: top_prep
+    members:
+      - step_14_hub_cover_output_top
+      - step_15_hub_cover_input_top
+      - step_16_hub_cover_small_top
+
+  - id: top_m6_hub_bolts
+    description: "6 M6 hub bolts on Casing_Top (2 per cover) — any order"
+    stream: top_prep
+    members:
+      - step_17_m6_bolt_top_01
+      - step_18_m6_bolt_top_04
+      - step_19_m6_bolt_top_05
+      - step_20_m6_bolt_top_10
+      - step_21_m6_bolt_top_06
+      - step_22_m6_bolt_top_13
+
+  - id: m10_casing_bolts
+    description: "6 M10 casing bolts inserted through Casing_Top — any order"
+    stream: fasteners
+    members:
+      - step_30_m10_bolt_01
+      - step_31_m10_bolt_02
+      - step_32_m10_bolt_03
+      - step_33_m10_bolt_04
+      - step_34_m10_bolt_05
+      - step_35_m10_bolt_06
+
+  - id: m10_casing_nuts
+    description: "6 M10 nuts (each on its bolt) — nuts themselves any order"
+    stream: fasteners
+    members:
+      - step_36_m10_nut_01
+      - step_37_m10_nut_02
+      - step_38_m10_nut_03
+      - step_39_m10_nut_04
+      - step_40_m10_nut_05
+      - step_41_m10_nut_06
+
+  - id: gearbox_accessories
+    description: "Oil indicators and breather plug — any order"
+    stream: accessories
+    members:
+      - step_42_oil_indicator_01
+      - step_43_oil_indicator_02
+      - step_44_breather_plug
+
+
+steps:
+
+  # =========================================================================
+  # PHASE 0 — Scene Setup
+  # =========================================================================
+
+  - id: step_01_validate_scene
+    phase: phase_0
+    action: inspect
+    child: null
+    parent: null
+    plug: null
+    socket: null
+    preconditions: []
+    postconditions:
+      - "all parts in asset_registry are present in stage"
+      - "no part is hovering (z > surface + margin)"
+    human_label: "Validate scene: check all parts are present and on surface"
+    executor_mode: magic
+    notes: "Runs /validate_scene. Must pass before any assembly step."
+
+  # =========================================================================
+  # PHASE 1 — Base Half Preparation
+  # Focus Casing_Base, attach 3 base hub covers and 6 M6 hub bolts (2 per
+  # cover), unfocus. Runs in parallel with Phase 2 (top_prep).
+  # =========================================================================
+
+  - id: step_02_focus_casing_base
+    phase: phase_1
+    action: focus
+    child: Casing_Base
+    parent: null
+    plug: null
+    socket: null
+    preconditions: [step_01_validate_scene]
+    postconditions:
+      - "Casing_Base.position ≈ [0, -0.85, z]"
+    human_label: "Move Casing_Base to the working area"
+    executor_mode: magic
+
+  - id: step_02b_flip_casing_base
+    phase: phase_1
+    action: flip
+    child: Casing_Base
+    parent: null
+    plug: null
+    socket: null
+    axis: x
+    preconditions: [step_02_focus_casing_base]
+    postconditions:
+      - "Casing_Base rotated 180° about X (inside faces upward)"
+    human_label: "Flip Casing_Base 180° so the inside faces upward"
+    executor_mode: magic
+    notes: "Exposes the inside of Casing_Base for hub-cover and shaft installation."
+
+  - id: step_03_hub_cover_output_base
+    phase: phase_1
+    action: combine
+    child: Hub_Cover_Output_Base
+    parent: Casing_Base
+    plug: plug_main
+    socket: socket_hub_output
+    preconditions: [step_02b_flip_casing_base]
+    postconditions:
+      - "Hub_Cover_Output_Base.parent == Casing_Base"
+    human_label: "Install output-side hub cover on base half"
+    executor_mode: magic
+
+  - id: step_04_hub_cover_small_base_01
+    phase: phase_1
+    action: combine
+    child: Hub_Cover_Small_Base_01
+    parent: Casing_Base
+    plug: plug_main
+    socket: socket_hub_small_1
+    preconditions: [step_02b_flip_casing_base]
+    postconditions:
+      - "Hub_Cover_Small_Base_01.parent == Casing_Base"
+    human_label: "Install small hub cover #1 on base half"
+    executor_mode: magic
+
+  - id: step_05_hub_cover_small_base_02
+    phase: phase_1
+    action: combine
+    child: Hub_Cover_Small_Base_02
+    parent: Casing_Base
+    plug: plug_main
+    socket: socket_hub_small_2
+    preconditions: [step_02b_flip_casing_base]
+    postconditions:
+      - "Hub_Cover_Small_Base_02.parent == Casing_Base"
+    human_label: "Install small hub cover #2 on base half"
+    executor_mode: magic
+    notes: "Prim confirmed present. Initial scatter position needs to be set in scatter_parts.py."
+
+  # M6 hub bolts on Casing_Base — 6 bolts (2 per cover).
+  # Bolt-to-cover assignment:
+  #   Hub_Cover_Output_Base   ← M6_Hub_Bolt_01, _02 (sockets 1, 2)
+  #   Hub_Cover_Small_Base_01 ← M6_Hub_Bolt_03, _04 (sockets 3, 4)
+  #   Hub_Cover_Small_Base_02 ← M6_Hub_Bolt_05, _06 (sockets 5, 6)
+
+  - id: step_06_m6_bolt_base_01
+    phase: phase_1
+    action: combine
+    child: M6_Hub_Bolt_01_base
+    parent: Casing_Base
+    plug: plug_main
+    socket: socket_bolt_hub_1
+    preconditions: [step_03_hub_cover_output_base]
+    postconditions:
+      - "M6_Hub_Bolt_01_base.parent == Casing_Base"
+    human_label: "Install M6 hub bolt 1 on base half (output cover)"
+    executor_mode: magic
+
+  - id: step_07_m6_bolt_base_10
+    phase: phase_1
+    action: combine
+    child: M6_Hub_Bolt_10_base
+    parent: Casing_Base
+    plug: plug_main
+    socket: socket_bolt_hub_10
+    preconditions: [step_03_hub_cover_output_base]
+    postconditions:
+      - "M6_Hub_Bolt_10.parent == Casing_Base"
+    human_label: "Install M6 hub bolt 10 on base half (output cover)"
+    executor_mode: magic
+
+  - id: step_08_m6_bolt_base_13
+    phase: phase_1
+    action: combine
+    child: M6_Hub_Bolt_13_base
+    parent: Casing_Base
+    plug: plug_main
+    socket: socket_bolt_hub_13
+    preconditions: [step_04_hub_cover_small_base_01]
+    postconditions:
+      - "M6_Hub_Bolt_13_base.parent == Casing_Base"
+    human_label: "Install M6 hub bolt 13 on base half (small cover #1)"
+    executor_mode: magic
+
+  - id: step_09_m6_bolt_base_04
+    phase: phase_1
+    action: combine
+    child: M6_Hub_Bolt_04_base
+    parent: Casing_Base
+    plug: plug_main
+    socket: socket_bolt_hub_4
+    preconditions: [step_04_hub_cover_small_base_01]
+    postconditions:
+      - "M6_Hub_Bolt_04_base.parent == Casing_Base"
+    human_label: "Install M6 hub bolt 4 on base half (small cover #1)"
+    executor_mode: magic
+
+  - id: step_10_m6_bolt_base_05
+    phase: phase_1
+    action: combine
+    child: M6_Hub_Bolt_05_base
+    parent: Casing_Base
+    plug: plug_main
+    socket: socket_bolt_hub_5
+    preconditions: [step_05_hub_cover_small_base_02]
+    postconditions:
+      - "M6_Hub_Bolt_05_base.parent == Casing_Base"
+    human_label: "Install M6 hub bolt 5 on base half (small cover #2)"
+    executor_mode: magic
+
+  - id: step_11_m6_bolt_base_06
+    phase: phase_1
+    action: combine
+    child: M6_Hub_Bolt_06_base
+    parent: Casing_Base
+    plug: plug_main
+    socket: socket_bolt_hub_6
+    preconditions: [step_05_hub_cover_small_base_02]
+    postconditions:
+      - "M6_Hub_Bolt_06_base.parent == Casing_Base"
+    human_label: "Install M6 hub bolt 6 on base half (small cover #2)"
+    executor_mode: magic
+
+  - id: step_12_unfocus_casing_base
+    phase: phase_1
+    action: unfocus
+    child: Casing_Base
+    parent: null
+    plug: null
+    socket: null
+    preconditions:
+      - step_06_m6_bolt_base_01
+      - step_07_m6_bolt_base_10
+      - step_08_m6_bolt_base_13
+      - step_09_m6_bolt_base_04
+      - step_10_m6_bolt_base_05
+      - step_11_m6_bolt_base_06
+    postconditions:
+      - "Casing_Base position is on the table, away from working area"
+    human_label: "Move Casing_Base away from the working area"
+    executor_mode: magic
+    notes: "Reverse of focus. Requires runner support for the 'unfocus' action."
+
+  # =========================================================================
+  # PHASE 2 — Top Half Preparation
+  # Focus Casing_Top, attach 3 top hub covers and 6 M6 hub bolts (2 per
+  # cover), unfocus. Runs in parallel with Phase 1 (base_prep).
+  # =========================================================================
+
+  - id: step_13_focus_casing_top
+    phase: phase_2
+    action: focus
+    child: Casing_Top
+    parent: null
+    plug: null
+    socket: null
+    preconditions: [step_01_validate_scene]
+    postconditions:
+      - "Casing_Top.position ≈ [0, -0.85, z]"
+    human_label: "Move Casing_Top to the working area"
+    executor_mode: magic
+    notes: "Casing_Top may need /flip_casing_base (180 deg rotation) before hub covers are attached. Verify orientation."
+
+  - id: step_14_hub_cover_output_top
+    phase: phase_2
+    action: combine
+    child: Hub_Cover_Output_Top
+    parent: Casing_Top
+    plug: plug_main
+    socket: socket_hub_output
+    preconditions: [step_13_focus_casing_top]
+    postconditions:
+      - "Hub_Cover_Output_Top.parent == Casing_Top"
+    human_label: "Install output-side hub cover on top half"
+    executor_mode: magic
+
+  - id: step_15_hub_cover_input_top
+    phase: phase_2
+    action: combine
+    child: Hub_Cover_Input_Top
+    parent: Casing_Top
+    plug: plug_main
+    socket: socket_hub_input
+    preconditions: [step_13_focus_casing_top]
+    postconditions:
+      - "Hub_Cover_Input_Top.parent == Casing_Top"
+    human_label: "Install input-side hub cover on top half"
+    executor_mode: magic
+
+  - id: step_16_hub_cover_small_top
+    phase: phase_2
+    action: combine
+    child: Hub_Cover_Small_Top
+    parent: Casing_Top
+    plug: plug_main
+    socket: socket_hub_small
+    preconditions: [step_13_focus_casing_top]
+    postconditions:
+      - "Hub_Cover_Small_Top.parent == Casing_Top"
+    human_label: "Install small hub cover on top half"
+    executor_mode: magic
+
+  # M6 hub bolts on Casing_Top — 6 bolts (2 per cover).
+  # Bolt-to-cover assignment:
+  #   Hub_Cover_Output_Top ← M6_Hub_Bolt_08, _09 (sockets 8, 9)
+  #   Hub_Cover_Input_Top  ← M6_Hub_Bolt_10, _11 (sockets 10, 11)
+  #   Hub_Cover_Small_Top  ← M6_Hub_Bolt_13, _14 (sockets 13, 14)
+
+  - id: step_17_m6_bolt_top_01
+    phase: phase_2
+    action: combine
+    child: M6_Hub_Bolt_01_top
+    parent: Casing_Top
+    plug: plug_main
+    socket: socket_bolt_hub_1
+    preconditions: [step_14_hub_cover_output_top]
+    postconditions:
+      - "M6_Hub_Bolt_01_top.parent == Casing_Top"
+    human_label: "Install M6 hub bolt 01 on top half (output cover)"
+    executor_mode: magic
+
+  - id: step_18_m6_bolt_top_04
+    phase: phase_2
+    action: combine
+    child: M6_Hub_Bolt_04_top
+    parent: Casing_Top
+    plug: plug_main
+    socket: socket_bolt_hub_4
+    preconditions: [step_14_hub_cover_output_top]
+    postconditions:
+      - "M6_Hub_Bolt_04_top.parent == Casing_Top"
+    human_label: "Install M6 hub bolt 4 on top half (output cover)"
+    executor_mode: magic
+
+  - id: step_19_m6_bolt_top_05
+    phase: phase_2
+    action: combine
+    child: M6_Hub_Bolt_05_top
+    parent: Casing_Top
+    plug: plug_main
+    socket: socket_bolt_hub_5
+    preconditions: [step_15_hub_cover_input_top]
+    postconditions:
+      - "M6_Hub_Bolt_05_top.parent == Casing_Top"
+    human_label: "Install M6 hub bolt 05 on top half (input cover)"
+    executor_mode: magic
+
+  - id: step_20_m6_bolt_top_10
+    phase: phase_2
+    action: combine
+    child: M6_Hub_Bolt_10_top
+    parent: Casing_Top
+    plug: plug_main
+    socket: socket_bolt_hub_10
+    preconditions: [step_15_hub_cover_input_top]
+    postconditions:
+      - "M6_Hub_Bolt_10_top.parent == Casing_Top"
+    human_label: "Install M6 hub bolt 10 on top half (input cover)"
+    executor_mode: magic
+
+  - id: step_21_m6_bolt_top_13
+    phase: phase_2
+    action: combine
+    child: M6_Hub_Bolt_13_top
+    parent: Casing_Top
+    plug: plug_main
+    socket: socket_bolt_hub_13
+    preconditions: [step_16_hub_cover_small_top]
+    postconditions:
+      - "M6_Hub_Bolt_13_top.parent == Casing_Top"
+    human_label: "Install M6 hub bolt 13 on top half (small cover)"
+    executor_mode: magic
+
+  - id: step_22_m6_bolt_top_06
+    phase: phase_2
+    action: combine
+    child: M6_Hub_Bolt_06_top
+    parent: Casing_Top
+    plug: plug_main
+    socket: socket_bolt_hub_6
+    preconditions: [step_16_hub_cover_small_top]
+    postconditions:
+      - "M6_Hub_Bolt_06_top.parent == Casing_Top"
+    human_label: "Install M6 hub bolt 06 on top half (small cover)"
+    executor_mode: magic
+
+  - id: step_23_unfocus_casing_top
+    phase: phase_2
+    action: unfocus
+    child: Casing_Top
+    parent: null
+    plug: null
+    socket: null
+    preconditions:
+      - step_17_m6_bolt_top_01
+      - step_18_m6_bolt_top_04
+      - step_19_m6_bolt_top_05
+      - step_20_m6_bolt_top_10
+      - step_21_m6_bolt_top_13
+      - step_22_m6_bolt_top_06
+
+    postconditions:
+      - "Casing_Top position is on the table, away from working area"
+    human_label: "Move Casing_Top away from the working area"
+    executor_mode: magic
+    notes: "Reverse of focus. Requires runner support for the 'unfocus' action."
+
+  # =========================================================================
+  # PHASE 3 — Base Half Assembly
+  # Refocus Casing_Base, install shafts in fixed order: output → transfer → input.
+  # Each shaft carries its pre-assembled bearings and gear.
+  # =========================================================================
+
+  - id: step_24_refocus_casing_base
+    phase: phase_3
+    action: focus
+    child: Casing_Base
+    parent: null
+    plug: null
+    socket: null
+    preconditions: [step_12_unfocus_casing_base]
+    postconditions:
+      - "Casing_Base.position ≈ [0, -0.85, z]"
+    human_label: "Bring Casing_Base back to the working area for shaft installation"
+    executor_mode: magic
+
+  - id: step_25_output_shaft
+    phase: phase_3
+    action: combine
+    child: Output_Shaft
+    parent: Casing_Base
+    plug: plug_main
+    socket: socket_gear_output
+    preconditions: [step_24_refocus_casing_base]
+    postconditions:
+      - "Output_Shaft.parent == Casing_Base"
+    human_label: "Install output shaft assembly into base casing"
+    executor_mode: magic
+    notes: "Carries pre-assembled bearings and Output_Gear. kinematic_offset.z = -18.32"
+
+  - id: step_26_transfer_shaft
+    phase: phase_3
+    action: combine
+    child: Transfer_Shaft
+    parent: Casing_Base
+    plug: plug_main
+    socket: socket_gear_transfer
+    preconditions: [step_25_output_shaft]
+    postconditions:
+      - "Transfer_Shaft.parent == Casing_Base"
+    human_label: "Install transfer shaft assembly into base casing"
+    executor_mode: magic
+    notes: "Carries pre-assembled bearings and Transfer_Gear. kinematic_offset.z = -27.0. Must follow output shaft."
+
+  - id: step_27_input_shaft
+    phase: phase_3
+    action: combine
+    child: Input_Shaft
+    parent: Casing_Base
+    plug: plug_main
+    socket: socket_gear_input
+    preconditions: [step_26_transfer_shaft]
+    postconditions:
+      - "Input_Shaft.parent == Casing_Base"
+    human_label: "Install input shaft assembly into base casing"
+    executor_mode: magic
+    notes: >
+      FIRST ROBOT TARGET (Phase 1D). Carries pre-assembled bearings.
+      Cylindrical geometry with clear top grasp axis.
+      kinematic_offset.z = -74.9 (local units). Must follow transfer shaft.
+
+  # =========================================================================
+  # PHASE 4 — Casing Mate
+  # Lower prepared Casing_Top (with hub covers + M6 bolts) onto populated
+  # Casing_Base. Convergence point for base_assembly and top_prep.
+  # =========================================================================
+
+  - id: step_28_mate_casing_top
+    phase: phase_4
+    action: combine
+    child: Casing_Top
+    parent: Casing_Base
+    plug: plug_casing_mate
+    socket: socket_casing_mate
+    preconditions:
+      - step_23_unfocus_casing_top
+      - step_27_input_shaft
+    postconditions:
+      - "Casing_Top.parent == Casing_Base"
+    human_label: "Lower top casing half onto base and mate"
+    executor_mode: magic
+    notes: "Critical alignment step. All shaft protrusions must clear hub covers before mating."
+
+  # =========================================================================
+  # PHASE 5 — Casing Fasteners
+  # Upright the joined casing (flat → upright), then install M10 bolts and nuts.
+  # =========================================================================
+
+  - id: step_29_upright_casing_base
+    phase: phase_5
+    action: upright
+    child: Casing_Base
+    parent: null
+    plug: null
+    socket: null
+    preconditions: [step_28_mate_casing_top]
+    postconditions:
+      - "Casing_Base orientation: upright (rotated from flat-on-table to standing)"
+    human_label: "Stand the mated casing upright (flat → upright)"
+    executor_mode: magic
+    notes: >
+      New 'upright' action. Valid only for magic mode or human worker;
+      robot cannot perform this. Requires runner support for the 'upright' action.
+
+  - id: step_30_m10_bolt_01
+    phase: phase_5
+    action: combine
+    child: M10_Casing_Bolt_01
+    parent: Casing_Top
+    plug: plug_main
+    socket: socket_bolt_casing_1
+    preconditions: [step_29_upright_casing_base]
+    postconditions:
+      - "M10_Casing_Bolt_01.parent == Casing_Top"
+    human_label: "Insert casing bolt 1"
+    executor_mode: magic
+
+  - id: step_31_m10_bolt_02
+    phase: phase_5
+    action: combine
+    child: M10_Casing_Bolt_02
+    parent: Casing_Top
+    plug: plug_main
+    socket: socket_bolt_casing_2
+    preconditions: [step_29_upright_casing_base]
+    postconditions:
+      - "M10_Casing_Bolt_02.parent == Casing_Top"
+    human_label: "Insert casing bolt 2"
+    executor_mode: magic
+
+  - id: step_32_m10_bolt_03
+    phase: phase_5
+    action: combine
+    child: M10_Casing_Bolt_03
+    parent: Casing_Top
+    plug: plug_main
+    socket: socket_bolt_casing_3
+    preconditions: [step_29_upright_casing_base]
+    postconditions:
+      - "M10_Casing_Bolt_03.parent == Casing_Top"
+    human_label: "Insert casing bolt 3"
+    executor_mode: magic
+
+  - id: step_33_m10_bolt_04
+    phase: phase_5
+    action: combine
+    child: M10_Casing_Bolt_04
+    parent: Casing_Top
+    plug: plug_main
+    socket: socket_bolt_casing_4
+    preconditions: [step_29_upright_casing_base]
+    postconditions:
+      - "M10_Casing_Bolt_04.parent == Casing_Top"
+    human_label: "Insert casing bolt 4"
+    executor_mode: magic
+
+  - id: step_34_m10_bolt_05
+    phase: phase_5
+    action: combine
+    child: M10_Casing_Bolt_05
+    parent: Casing_Top
+    plug: plug_main
+    socket: socket_bolt_casing_5
+    preconditions: [step_29_upright_casing_base]
+    postconditions:
+      - "M10_Casing_Bolt_05.parent == Casing_Top"
+    human_label: "Insert casing bolt 5"
+    executor_mode: magic
+
+  - id: step_35_m10_bolt_06
+    phase: phase_5
+    action: combine
+    child: M10_Casing_Bolt_06
+    parent: Casing_Top
+    plug: plug_main
+    socket: socket_bolt_casing_6
+    preconditions: [step_29_upright_casing_base]
+    postconditions:
+      - "M10_Casing_Bolt_06.parent == Casing_Top"
+    human_label: "Insert casing bolt 6"
+    executor_mode: magic
+
+  - id: step_36_m10_nut_01
+    phase: phase_5
+    action: combine
+    child: M10_Casing_Nut_01
+    parent: M10_Casing_Bolt_01
+    plug: plug_main
+    socket: null
+    preconditions: [step_30_m10_bolt_01]
+    postconditions:
+      - "M10_Casing_Nut_01.parent == M10_Casing_Bolt_01"
+    human_label: "Thread nut onto casing bolt 1"
+    executor_mode: magic
+
+  - id: step_37_m10_nut_02
+    phase: phase_5
+    action: combine
+    child: M10_Casing_Nut_02
+    parent: M10_Casing_Bolt_02
+    plug: plug_main
+    socket: null
+    preconditions: [step_31_m10_bolt_02]
+    postconditions:
+      - "M10_Casing_Nut_02.parent == M10_Casing_Bolt_02"
+    human_label: "Thread nut onto casing bolt 2"
+    executor_mode: magic
+
+  - id: step_38_m10_nut_03
+    phase: phase_5
+    action: combine
+    child: M10_Casing_Nut_03
+    parent: M10_Casing_Bolt_03
+    plug: plug_main
+    socket: null
+    preconditions: [step_32_m10_bolt_03]
+    postconditions:
+      - "M10_Casing_Nut_03.parent == M10_Casing_Bolt_03"
+    human_label: "Thread nut onto casing bolt 3"
+    executor_mode: magic
+
+  - id: step_39_m10_nut_04
+    phase: phase_5
+    action: combine
+    child: M10_Casing_Nut_04
+    parent: M10_Casing_Bolt_04
+    plug: plug_main
+    socket: null
+    preconditions: [step_33_m10_bolt_04]
+    postconditions:
+      - "M10_Casing_Nut_04.parent == M10_Casing_Bolt_04"
+    human_label: "Thread nut onto casing bolt 4"
+    executor_mode: magic
+
+  - id: step_40_m10_nut_05
+    phase: phase_5
+    action: combine
+    child: M10_Casing_Nut_05
+    parent: M10_Casing_Bolt_05
+    plug: plug_main
+    socket: null
+    preconditions: [step_34_m10_bolt_05]
+    postconditions:
+      - "M10_Casing_Nut_05.parent == M10_Casing_Bolt_05"
+    human_label: "Thread nut onto casing bolt 5"
+    executor_mode: magic
+
+  - id: step_41_m10_nut_06
+    phase: phase_5
+    action: combine
+    child: M10_Casing_Nut_06
+    parent: M10_Casing_Bolt_06
+    plug: plug_main
+    socket: null
+    preconditions: [step_35_m10_bolt_06]
+    postconditions:
+      - "M10_Casing_Nut_06.parent == M10_Casing_Bolt_06"
+    human_label: "Thread nut onto casing bolt 6"
+    executor_mode: magic
+
+  # =========================================================================
+  # PHASE 6 — Accessories
+  # =========================================================================
+
+  - id: step_42_oil_indicator_01
+    phase: phase_6
+    action: combine
+    child: Oil_Level_Indicator_01
+    parent: Casing_Base
+    plug: plug_main
+    socket: socket_oil_1
+    preconditions: [step_28_mate_casing_top]
+    postconditions:
+      - "Oil_Level_Indicator.parent == Casing_Base"
+    human_label: "Install oil level indicator 1"
+    executor_mode: magic
+
+  - id: step_43_oil_indicator_02
+    phase: phase_6
+    action: combine
+    child: Oil_Level_Indicator_02
+    parent: Casing_Base
+    plug: plug_main
+    socket: socket_oil_2
+    preconditions: [step_28_mate_casing_top]
+    postconditions:
+      - "Oil_Level_Indicator_02.parent == Casing_Base"
+    human_label: "Install oil level indicator 2"
+    executor_mode: magic
+    notes: "Prim confirmed present. Initial scatter position needs to be added to scatter_parts.py."
+
+  - id: step_44_breather_plug
+    phase: phase_6
+    action: combine
+    child: Breather_Plug
+    parent: Casing_Base
+    plug: plug_main
+    socket: socket_breather
+    preconditions: [step_28_mate_casing_top]
+    postconditions:
+      - "Breather_Plug.parent == Casing_Base"
+    human_label: "Install breather plug"
+    executor_mode: magic
+
+# ---------------------------------------------------------------------------
+# SHORTCUT ALIASES
+# Legacy ui.py shortcut commands mapped to step subsets in this sequence.
+# ---------------------------------------------------------------------------
+
+shortcut_aliases:
+
+  combine_casing_base:
+    steps: [step_03_hub_cover_output_base, step_04_hub_cover_small_base_01,
+            step_05_hub_cover_small_base_02,
+            step_06_m6_bolt_base_01, step_07_m6_bolt_base_02,
+            step_08_m6_bolt_base_03, step_09_m6_bolt_base_04,
+            step_10_m6_bolt_base_05, step_11_m6_bolt_base_06]
+    description: "Install 3 base hub covers and 6 M6 hub bolts onto Casing_Base"
+
+  combine_casing_top:
+    steps: [step_14_hub_cover_output_top, step_15_hub_cover_input_top,
+            step_16_hub_cover_small_top,
+            step_17_m6_bolt_top_08, step_18_m6_bolt_top_09,
+            step_19_m6_bolt_top_10, step_20_m6_bolt_top_11,
+            step_21_m6_bolt_top_13, step_22_m6_bolt_top_14]
+    description: "Install 3 top hub covers and 6 M6 hub bolts onto Casing_Top"
+
+  combine_base_shafts:
+    steps: [step_25_output_shaft, step_26_transfer_shaft, step_27_input_shaft]
+    description: "Install all three shaft assemblies into Casing_Base (order: output → transfer → input)"
+
+  combine_bolt_hub_base:
+    steps: [step_06_m6_bolt_base_01, step_07_m6_bolt_base_02,
+            step_08_m6_bolt_base_03, step_09_m6_bolt_base_04,
+            step_10_m6_bolt_base_05, step_11_m6_bolt_base_06]
+    description: "Install all 6 M6 hub bolts onto Casing_Base"
+
+  combine_bolt_hub_top:
+    steps: [step_17_m6_bolt_top_08, step_18_m6_bolt_top_09,
+            step_19_m6_bolt_top_10, step_20_m6_bolt_top_11,
+            step_21_m6_bolt_top_13, step_22_m6_bolt_top_14]
+    description: "Install all 6 M6 hub bolts onto Casing_Top"
+
+  combine_bolt_hub:
+    steps: [step_17_m6_bolt_top_08, step_18_m6_bolt_top_09,
+            step_19_m6_bolt_top_10, step_20_m6_bolt_top_11,
+            step_21_m6_bolt_top_13, step_22_m6_bolt_top_14]
+    description: "Alias for combine_bolt_hub_top (legacy: M6 bolts onto Casing_Top)"
+
+  combine_casing_bolt:
+    steps: [step_30_m10_bolt_01, step_31_m10_bolt_02, step_32_m10_bolt_03,
+            step_33_m10_bolt_04, step_34_m10_bolt_05, step_35_m10_bolt_06,
+            step_36_m10_nut_01, step_37_m10_nut_02, step_38_m10_nut_03,
+            step_39_m10_nut_04, step_40_m10_nut_05, step_41_m10_nut_06]
+    description: "Install all M10 casing bolts and nuts"
+
+  combine_accessories:
+    steps: [step_42_oil_indicator_01, step_43_oil_indicator_02, step_44_breather_plug]
+    description: "Install oil indicators and breather plug"
+
+  combine_input_shaft:
+    steps: []
+    description: "DEPRECATED — bearings + gears confirmed pre-assembled; no sub-assembly mounting needed"
+
+  combine_transfer_shaft:
+    steps: []
+    description: "DEPRECATED — bearings + gears confirmed pre-assembled; no sub-assembly mounting needed"
+
+  combine_output_shaft:
+    steps: []
+    description: "DEPRECATED — bearings + gears confirmed pre-assembled; no sub-assembly mounting needed"
+
+# ---------------------------------------------------------------------------
+# OPEN ITEMS
+# ---------------------------------------------------------------------------
+# - **New actions need runner support**: 'unfocus' (Phase 1, 2) and 'upright'
+#   (Phase 5) are not yet implemented in sequence_runner._execute_step. They
+#   currently fall through to "unknown action" WARN. Add handlers and wire
+#   corresponding MagicAssemblyManager methods (or no-ops with logging).
+# - **M6 bolt scatter positions**: all 12 M6_Hub_Bolt_* prims start stacked at
+#   (-1.00, 0.80, 0.02). Fix: add spread positions in scatter_parts.py.
+# - **M10_Casing_Bolt_03..06 and M10_Casing_Nut_02..06**: no scatter entries.
+#   Fix: add initial positions in scatter_parts.py.
+# - **Hub_Cover_Small_Base_02 and Oil_Level_Indicator_02**: prims confirmed
+#   present but no scatter positions. Fix: add in scatter_parts.py.
+# - **Casing_Top flip orientation**: step_13 note mentions possible
+#   /flip_casing_base needed. Confirm whether this should be an explicit step.

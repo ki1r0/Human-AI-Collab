@@ -86,6 +86,16 @@ class State:
 
         # Magic (kinematic) assembly manager
         self.magic_assembly = None
+        # Startup scene snapshot for explicit /reset commands.
+        self.initial_scene_snapshot = {}
+        self.initial_scene_stage_id = ""
+
+        # Sequence runner (loaded from assembly/gearbox_sequence.yaml)
+        self.sequence_runner = None
+        # Slash command to re-dispatch after the operator answers a paused
+        # check_pose prompt (see _ui_pose_resolver / on_send in ui.py). None
+        # when no pose query is awaiting an answer.
+        self.pose_resume_cmd = None
 
         # Hybrid ToM: GT state monitor + ring buffer
         self.state_monitor = None

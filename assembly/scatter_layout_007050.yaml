@@ -1,0 +1,104 @@
+# Scatter Layout — initial part placement spec for tools/scatter_parts.py
+#
+# Separated from the scatter script so positions/surfaces can be edited as data.
+# tools/scatter_parts.py reads this file and writes the transforms into
+# assets/simple_room_scene.usd (see docs/object_placement.md, docs/scene_authoring.md).
+#
+# Per-part entry forms (under `parts:`):
+#   bbox-contact (preferred):
+#     <Part>: {xy: [x, y], surface: table|floor, rot: [rx, ry, rz], z: <override>}
+#       - xy       required; world X/Y translate
+#       - surface  required for Z; bbox bottom rests at <surface>_surface_z + spawn_margin
+#       - rot      optional Euler XYZ degrees (xformOp:rotateXYZ), applied before Z
+#       - z        optional explicit Z override (skips bbox contact)
+#   legacy absolute:
+#     <Part>: {pos: [x, y, z]}        # translate set directly; rotation preserved
+
+meta:
+  scene: assets/simple_room_scene.usd
+  description: Initial scatter poses and surface constants for scatter_parts.py
+
+# ---------------------------------------------------------------------------
+# Surface constants (Z-up, world metres)
+# ---------------------------------------------------------------------------
+surfaces:
+  table_surface_z: -0.1     # bbox-contact target for surface: table
+  floor_surface_z: 0.0      # bbox-contact target for surface: floor
+  spawn_margin: 0.005       # clearance above the surface (bbox bottom = surface + margin)
+  table_z: 0.022            # legacy absolute-translate Z (only for pos-form entries)
+  floor_z: 0.02             # legacy absolute-translate Z (only for pos-form entries)
+
+# ---------------------------------------------------------------------------
+# Part initial poses
+# ---------------------------------------------------------------------------
+parts:
+
+  # --- Large casings: on the table ---
+  Casing_Base: {xy: [0.7797, -0.6634], surface: table, rot: [0.0, 0.0, 0.0]}   # table, back-left
+  Casing_Top:  {xy: [-0.0993, -0.9351], surface: table, rot: [0.0, 0.0, 0.0]}  # table, back-right
+
+  # --- Gears (pre-assembled onto shafts; not scattered) ---
+  # Output_Gear:   {xy: [-0.40, 0.50], surface: table}
+  # Transfer_Gear: {xy: [0.40, -0.50], surface: table}
+
+  # --- Hub covers ---
+  Hub_Cover_Input:         {xy: [0.1697, -1.1423], surface: table, rot: [0.0, 90.0, 0.0]}   # front-left
+  Hub_Cover_Output_Top:    {xy: [0.0865, -1.3411], surface: table, rot: [90.0, 0.0, 0.0]}
+  Hub_Cover_Small_Top:     {xy: [-0.9099, -0.6733], surface: table, rot: [0.0, 90.0, 0.0]}
+  Hub_Cover_Output_Base:   {xy: [0.0317, -1.3288], surface: table, rot: [90.0, 0.0, 0.0]}
+  Hub_Cover_Small_Base_01: {xy: [-0.0064, -1.1197], surface: table, rot: [0.0, 90.0, 0.0]}
+  Hub_Cover_Small_Base_02: {xy: [-0.6428, -1.1974], surface: table, rot: [0.0, 90.0, 0.0]}
+
+  # --- Shafts: standing upright on the table (long axis onto world-Z via rot) ---
+  Output_Shaft:   {xy: [-1.0728, -1.3437], surface: table, rot: [90.0, 0.0, 0.0]}
+  Transfer_Shaft: {xy: [-0.9969, -0.9848], surface: table, rot: [0.0, 90.0, 0.0]}
+  Input_Shaft:    {xy: [-0.792, -0.9304], surface: table, rot: [90.0, 0.0, 0.0]}
+
+  # --- M10 casing bolts ---
+  M10_Casing_Bolt_01: {xy: [-0.6009, -0.7217], surface: table, rot: [0.0, 0.0, 0.0]}
+  M10_Casing_Bolt_02: {xy: [-0.6824, -0.6417], surface: table, rot: [0.0, 0.0, 0.0]}
+  M10_Casing_Bolt_03: {xy: [-0.8519, -0.7039], surface: table, rot: [0.0, 0.0, 0.0]}
+  M10_Casing_Bolt_04: {xy: [-0.8034, -0.6086], surface: table, rot: [0.0, 0.0, 0.0]}
+  M10_Casing_Bolt_05: {xy: [-0.6403, -0.6405], surface: table, rot: [0.0, 0.0, 0.0]}
+  M10_Casing_Bolt_06: {xy: [-0.7775, -0.6939], surface: table, rot: [0.0, 0.0, 0.0]}
+
+  # --- M10 casing nuts ---
+  M10_Casing_Nut_01: {xy: [0.4146, -0.7478], surface: table, rot: [0.0, 0.0, 0.0]}
+  M10_Casing_Nut_02: {xy: [0.362, -0.6439], surface: table, rot: [0.0, 0.0, 0.0]}
+  M10_Casing_Nut_03: {xy: [0.4265, -0.6552], surface: table, rot: [0.0, 0.0, 0.0]}
+  M10_Casing_Nut_04: {xy: [0.3074, -0.6329], surface: table, rot: [0.0, 0.0, 0.0]}
+  M10_Casing_Nut_05: {xy: [0.4561, -0.5652], surface: table, rot: [0.0, 0.0, 0.0]}
+  M10_Casing_Nut_06: {xy: [0.4703, -0.8088], surface: table, rot: [0.0, 0.0, 0.0]}
+
+  # --- M6 hub bolts: base side (mid-left) ---
+  M6_Hub_Bolt_01_base: {xy: [0.63, -0.6916], surface: table, rot: [0.0, 0.0, 0.0]}
+  M6_Hub_Bolt_02_base: {xy: [0.6869, -0.7754], surface: table, rot: [0.0, 0.0, 0.0]}
+  M6_Hub_Bolt_03_base: {xy: [0.3832, -0.9678], surface: table, rot: [0.0, 0.0, 0.0]}
+  M6_Hub_Bolt_04_base: {xy: [0.5194, -0.7454], surface: table, rot: [0.0, 0.0, 0.0]}
+  M6_Hub_Bolt_05_base: {xy: [0.5558, -0.6741], surface: table, rot: [0.0, 0.0, 0.0]}
+  M6_Hub_Bolt_06_base: {xy: [0.5934, -0.7406], surface: table, rot: [0.0, 0.0, 0.0]}
+  M6_Hub_Bolt_07_base: {xy: [0.3893, -0.9057], surface: table, rot: [0.0, 0.0, 0.0]}
+  M6_Hub_Bolt_08_base: {xy: [0.5213, -0.8006], surface: table, rot: [0.0, 0.0, 0.0]}
+  M6_Hub_Bolt_09_base: {xy: [0.4467, -0.8727], surface: table, rot: [0.0, 0.0, 0.0]}
+  M6_Hub_Bolt_10_base: {xy: [0.6052, -0.7798], surface: table, rot: [0.0, 0.0, 0.0]}
+  M6_Hub_Bolt_11_base: {xy: [0.371, -0.835], surface: table, rot: [0.0, 0.0, 0.0]}
+  M6_Hub_Bolt_12_base: {xy: [0.5114, -0.6961], surface: table, rot: [0.0, 0.0, 0.0]}
+
+  # --- M6 hub bolts: top side (mid-right) ---
+  M6_Hub_Bolt_01_top: {xy: [0.3216, -0.9055], surface: table, rot: [0.0, 0.0, 0.0]}
+  M6_Hub_Bolt_02_top: {xy: [0.5537, -0.7145], surface: table, rot: [0.0, 0.0, 0.0]}
+  M6_Hub_Bolt_03_top: {xy: [0.3068, -0.9821], surface: table, rot: [0.0, 0.0, 0.0]}
+  M6_Hub_Bolt_04_top: {xy: [0.6858, -0.6589], surface: table, rot: [0.0, 0.0, 0.0]}
+  M6_Hub_Bolt_05_top: {xy: [0.6116, -0.836], surface: table, rot: [0.0, 0.0, 0.0]}
+  M6_Hub_Bolt_06_top: {xy: [0.481, -0.9092], surface: table, rot: [0.0, 0.0, 0.0]}
+  M6_Hub_Bolt_07_top: {xy: [0.5915, -0.653], surface: table, rot: [0.0, 0.0, 0.0]}
+  M6_Hub_Bolt_08_top: {xy: [0.2936, -0.8404], surface: table, rot: [0.0, 0.0, 0.0]}
+  M6_Hub_Bolt_09_top: {xy: [0.5681, -0.8217], surface: table, rot: [0.0, 0.0, 0.0]}
+  M6_Hub_Bolt_10_top: {xy: [0.4387, -0.9532], surface: table, rot: [0.0, 0.0, 0.0]}
+  M6_Hub_Bolt_11_top: {xy: [0.6596, -0.8099], surface: table, rot: [0.0, 0.0, 0.0]}
+  M6_Hub_Bolt_12_top: {xy: [0.4743, -1.0007], surface: table, rot: [0.0, 0.0, 0.0]}
+
+  # --- Accessories ---
+  Breather_Plug:          {xy: [-0.5614, -1.3897], surface: table, rot: [-90.0, 0.0, 0.0]}
+  Oil_Level_Indicator_01: {xy: [-0.6619, -1.4292], surface: table, rot: [-90.0, 0.0, 0.0]}
+  Oil_Level_Indicator_02: {xy: [-0.4575, -1.1911], surface: table, rot: [-90.0, 0.0, 0.0]}

@@ -305,12 +305,16 @@ HARDCODED_FIT_OFFSETS: Dict[Tuple[str, str, str, str], Dict[str, Tuple[float, fl
         "translate": (0.0, 0.0, -27.0),
         "rotate_xyz": (0.0, -90.0, 0.0),
     },
-    # Casing_Base is authored with mirrored X/Z scale in the scene. The top
-    # therefore needs a 180deg Y flip during mating so its exterior (hub-cover)
-    # face ends up upward in world space, plus a local Z shift so it lands on
-    # the upper parting face instead of underneath the base shell.
+    # Casing_Base is authored with mirrored X/Z scale in the scene, so the top
+    # needs a 180deg Y flip during mating to bring its parting face down to meet
+    # the base. plug_casing_mate and socket_casing_mate are now both authored on
+    # their respective parting faces (each at local Z = -27.9), so the flip plus
+    # the plug<->socket snap already lands the faces flush — no extra Z shift.
+    # (The former translate Z=-55.8 = 2x27.9 was tuned for an older prim layout
+    # and double-counted once the sockets were re-authored symmetrically,
+    # opening a ~55.8-unit gap between the halves.)
     ("Casing_Top", "Casing_Base", "plug_casing_mate", "socket_casing_mate"): {
-        "translate": (0.0, 0.0, -55.8),
+        "translate": (0.0, 0.0, 0.0),
         "rotate_xyz": (0.0, 180.0, 0.0),
     },
     # ── Hub covers ──────────────────────────────────────────────────────
@@ -376,15 +380,15 @@ HARDCODED_FIT_OFFSETS: Dict[Tuple[str, str, str, str], Dict[str, Tuple[float, fl
         "rotate_xyz": (90.0, 0.0, 0.0),
     },
     ("Oil_Level_Indicator", "Casing_Base", "plug_main", "socket_oil_1"): {
-        "translate": (0.0, 0.0, 0.0),
-        "rotate_xyz": (90.0, 0.0, 0.0),
+        "translate": (13.0, 0.0, 0.0),
+        "rotate_xyz": (90.0, -90.0, 0.0),
     },
     ("Oil_Level_Indicator", "Casing_Base", "plug_main", "socket_oil_2"): {
-        "translate": (0.0, 0.0, 0.0),
-        "rotate_xyz": (90.0, 0.0, 0.0),
+        "translate": (-13.0, 0.0, 0.0),
+        "rotate_xyz": (90.0, 90.0, 0.0),
     },
     ("Breather_Plug", "Casing_Base", "plug_main", "socket_breather"): {
-        "translate": (0.0, 0.0, 0.0),
+        "translate": (0.0, 0.0, 1.5),
         "rotate_xyz": (90.0, 0.0, 0.0),
     },
     # ── Nuts ────────────────────────────────────────────────────────────
@@ -508,6 +512,15 @@ class MagicAssemblyManager:
         # child_current_path -> AssemblyRecord
         self._records: Dict[str, AssemblyRecord] = {}
         self._queue: queue.Queue[AssemblyCommand] = queue.Queue()
+        # focus_target_path -> pre-focus local xform (for unfocus restore).
+        # Stored as Gf.Matrix4d but typed loosely to avoid module-level USD import.
+        self._focus_pose_cache: Dict[str, object] = {}
+        # Undo stack: list of records describing reversible actions.
+        # Each record is {"action": str, ...action-specific fields}.
+        self._undo_stack: List[Dict[str, object]] = []
+        # Lazy registry alias index for _find_prim_path fallback.
+        # name -> [synonym names] derived from assembly/asset_registry.yaml.
+        self._registry_aliases: Optional[Dict[str, List[str]]] = None
 
     # ------------------------------------------------------------------
     # Thread-safe queue interface
@@ -836,6 +849,129 @@ class MagicAssemblyManager:
             f" | socket={socket_name or 'origin'}"
             f" | new_path={new_child_path}"
         )
+        self._push_undo("combine", child_name=child_name, parent_name=parent_name,
+                        plug_name=plug_name, socket_name=socket_name)
+        return True
+
+    def stage(
+        self,
+        part_a: str,
+        part_b: str,
+        plug_name: Optional[str] = None,
+        socket_name: Optional[str] = None,
+        hover_m: float = 0.15,
+    ) -> bool:
+        """Pre-position part_a directly above where it will combine onto part_b.
+
+        Computes the same seated transform combine() would apply (plug<->socket
+        alignment + hardcoded fit/override offsets), lifts it by ``hover_m``
+        metres along world +Z, and writes it to the part WITHOUT reparenting.
+        The later combine() then drops the part straight down into place (the
+        staged and seated poses differ only by the vertical hover).
+
+        Returns True on success, False on any error. Does not record an
+        assembly (the part is only positioned, not attached).
+        """
+        from pxr import Gf  # type: ignore
+
+        child_name = str(part_a)
+        parent_name = str(part_b)
+        self._log(
+            f"[MAGIC] stage START: child={child_name!r}, parent={parent_name!r}, "
+            f"plug={plug_name!r}, socket={socket_name!r}, hover_m={hover_m}"
+        )
+
+        stage = self._stage_fn()
+        if stage is None:
+            self._log("[MAGIC] stage: stage not available")
+            return False
+
+        child_path = self._find_prim_path(stage, child_name)
+        parent_path = self._find_prim_path(stage, parent_name)
+        if child_path is None:
+            self._log(f"[MAGIC] stage FAIL: child '{child_name}' not found in stage")
+            return False
+        if parent_path is None:
+            self._log(f"[MAGIC] stage FAIL: parent '{parent_name}' not found in stage")
+            return False
+
+        child_prim = stage.GetPrimAtPath(child_path)
+        parent_prim = stage.GetPrimAtPath(parent_path)
+        tc = self._time_code(stage)
+
+        # Steps pass plug/socket explicitly; fall back to the default maps.
+        if not socket_name:
+            socket_name = DEFAULT_SOCKET_MAP.get(
+                (child_prim.GetName(), parent_prim.GetName())
+            )
+        if not plug_name:
+            plug_name = DEFAULT_PLUG_MAP.get(
+                (child_prim.GetName(), parent_prim.GetName()), "plug_main"
+            )
+
+        child_world_before = self._world_xform(child_prim, tc)
+        parent_world = self._world_xform(parent_prim, tc)
+
+        socket_local = self._find_socket_local(
+            stage, parent_prim, parent_world, socket_name, tc,
+            strict=bool(socket_name),
+        )
+        if socket_local is None:
+            self._log(
+                f"[MAGIC] stage FAIL: socket '{socket_name}' not found on "
+                f"'{parent_prim.GetName()}'"
+            )
+            return False
+        plug_local = self._find_plug_local(
+            stage, child_prim, child_world_before, tc,
+            plug_name=plug_name, strict=bool(plug_name),
+        )
+        if plug_local is None:
+            self._log(
+                f"[MAGIC] stage FAIL: plug '{plug_name}' not found on "
+                f"'{child_prim.GetName()}'"
+            )
+            return False
+
+        # Seated LOCAL transform — mirrors combine() so the staged pose matches
+        # the insertion pose exactly (kept in sync by hand; see combine()).
+        fit_offset = self._resolve_fit_offset(
+            child_prim.GetName(), parent_prim.GetName(),
+            str(plug_name or ""), str(socket_name or ""),
+        )
+        child_local_new = plug_local.GetInverse() * fit_offset * socket_local
+        child_local_new = self._apply_child_local_overrides(
+            child_name=child_prim.GetName(),
+            parent_name=parent_prim.GetName(),
+            plug_name=str(plug_name or ""),
+            socket_name=str(socket_name or ""),
+            child_local_new=child_local_new,
+        )
+
+        # Seated WORLD pose (where combine would land it), then lift +Z by hover.
+        seated_world = Gf.Matrix4d(child_local_new) * parent_world
+        row = seated_world.GetRow3(3)
+        lifted_world = Gf.Matrix4d(seated_world)
+        lifted_world.SetTranslateOnly(
+            Gf.Vec3d(float(row[0]), float(row[1]), float(row[2]) + float(hover_m))
+        )
+
+        # Apply as the child's LOCAL transform under its CURRENT parent — no
+        # reparent. world = local * parent_world  =>  local = world * inv(parent).
+        child_parent_world = self._world_xform(child_prim.GetParent(), tc)
+        inv_parent = child_parent_world.GetInverse()
+        pre_stage_local = Gf.Matrix4d(child_world_before) * inv_parent  # for undo
+        child_local = lifted_world * inv_parent
+        self._set_xform_matrix(child_prim, child_local)
+
+        final_world = self._world_xform(child_prim, tc)
+        self._log(
+            f"[MAGIC] stage OK: '{child_name}' above socket '{socket_name}' on "
+            f"'{parent_name}' | hover={hover_m}m | origin="
+            f"({final_world.GetRow3(3)[0]:.2f}, {final_world.GetRow3(3)[1]:.2f}, "
+            f"{final_world.GetRow3(3)[2]:.2f})"
+        )
+        self._push_undo("stage", part_name=child_name, pre_local=pre_stage_local)
         return True
 
     def _separate_resolved_path(self, stage, part_path) -> bool:
@@ -1051,6 +1187,13 @@ class MagicAssemblyManager:
             target_parent_world = Gf.Matrix4d(1.0)
         else:
             target_parent_world = self._world_xform(focus_parent, tc)
+
+        # Capture pre-focus world xform so unfocus() can restore it.
+        # Using world (not local) is robust to parent transform changes.
+        self._focus_pose_cache[str(focus_path)] = Gf.Matrix4d(
+            self._world_xform(focus_prim, tc)
+        )
+
         new_local = target_parent_world.GetInverse() * target_world
         self._set_xform_matrix(focus_prim, new_local)
 
@@ -1058,7 +1201,653 @@ class MagicAssemblyManager:
             f"[MAGIC] focus OK: part='{part_name}' target='{focus_path}' "
             f"-> part_world (0.0, -0.85, {float(part_world_row[2]):.3f})"
         )
+        self._push_undo("focus", part_name=part_name)
         return True
+
+    def unfocus(self, part_name: str) -> bool:
+        """Reverse of focus(): restore the pre-focus local xform of the part's
+        focus-target node. If no pose was cached (e.g. focus was never called
+        for this part), logs INFO and returns True without moving anything —
+        so the sequence keeps progressing in magic mode."""
+        from pxr import Gf  # type: ignore
+
+        self._log(f"[MAGIC] unfocus START: part={part_name!r}")
+
+        stage = self._stage_fn()
+        if stage is None:
+            self._log("[MAGIC] unfocus FAIL: stage not available")
+            return False
+
+        part_path = self._find_prim_path(stage, part_name)
+        if part_path is None:
+            self._log(f"[MAGIC] unfocus FAIL: part '{part_name}' not found")
+            return False
+
+        focus_path = self._resolve_focus_target_path(stage, part_path)
+        focus_prim = stage.GetPrimAtPath(focus_path)
+        if focus_prim is None or not focus_prim.IsValid():
+            self._log(f"[MAGIC] unfocus FAIL: focus target invalid at {focus_path}")
+            return False
+
+        cached_world = self._focus_pose_cache.pop(str(focus_path), None)
+        if cached_world is None:
+            self._log(
+                f"[MAGIC] unfocus: no cached pre-focus pose for '{focus_path}' "
+                f"— treating as no-op (part stays at current pose)"
+            )
+            return True
+
+        tc = self._time_code(stage)
+        focus_parent = focus_prim.GetParent()
+        if focus_parent is None or focus_parent.IsPseudoRoot():
+            parent_world = Gf.Matrix4d(1.0)
+        else:
+            parent_world = self._world_xform(focus_parent, tc)
+
+        # Same local-from-world formula focus() uses.
+        new_local = parent_world.GetInverse() * Gf.Matrix4d(cached_world)
+        self._set_xform_matrix(focus_prim, new_local)
+        self._log(f"[MAGIC] unfocus OK: restored '{focus_path}' to pre-focus pose")
+        self._push_undo("unfocus", part_name=part_name)
+        return True
+
+    def upright(self, part_name: str, axis: str = "x",
+                seat: bool = False, surface: object = "table", margin: float = 0.005) -> bool:
+        """Rotate the part's focus-target node 90° about world X (default) or Y
+        to stand it upright (flat-on-table → standing).
+        Magic-mode-only; not robot-executable.
+
+        When `seat` is True, re-seat the part onto `surface` afterwards (standing
+        a flat part changes its lowest point). The seat Δz is folded into the
+        undo record so one /undo reverses both."""
+        from pxr import Gf  # type: ignore
+
+        self._log(f"[MAGIC] upright START: part={part_name!r}, axis={axis!r}, seat={seat}")
+
+        stage = self._stage_fn()
+        if stage is None:
+            self._log("[MAGIC] upright FAIL: stage not available")
+            return False
+
+        target_path, target_prim = self._resolve_target(stage, part_name)
+        if target_prim is None:
+            return False
+
+        ax = axis.lower().strip()
+        if ax not in ("x", "y"):
+            self._log(f"[MAGIC] upright FAIL: axis must be 'x' or 'y', got {axis!r}")
+            return False
+        axis_vec = Gf.Vec3d(1.0, 0.0, 0.0) if ax == "x" else Gf.Vec3d(0.0, 1.0, 0.0)
+
+        tc = self._time_code(stage)
+        self._apply_rotation_about_origin(target_prim, axis_vec, 90.0, tc)
+        seat_dz = self._maybe_seat(stage, target_prim, seat, surface, margin, tc, "upright")
+        self._log(f"[MAGIC] upright OK: rotated '{target_path}' 90° about {ax.upper()}")
+        self._push_undo("upright", part_name=part_name, axis=ax, seat_dz=seat_dz)
+        return True
+
+    # ------------------------------------------------------------------
+    # New manipulation primitives: flip, rotate, pick_up, put_down, undo
+    # ------------------------------------------------------------------
+
+    def _push_undo(self, action: str, **data: object) -> None:
+        """Record an action for /undo. data must be sufficient to reverse it."""
+        rec: Dict[str, object] = {"action": action}
+        rec.update(data)
+        self._undo_stack.append(rec)
+
+    def _resolve_target(self, stage, part_name: str):
+        """Return (target_path, target_prim) for a manipulation primitive,
+        resolving to the top-level focus target like focus() does. Returns
+        (None, None) on failure (and logs the reason)."""
+        part_path = self._find_prim_path(stage, part_name)
+        if part_path is None:
+            self._log(f"[MAGIC] target lookup FAIL: part '{part_name}' not found")
+            return None, None
+        target_path = self._resolve_focus_target_path(stage, part_path)
+        target_prim = stage.GetPrimAtPath(target_path)
+        if target_prim is None or not target_prim.IsValid():
+            self._log(f"[MAGIC] target lookup FAIL: invalid prim at {target_path}")
+            return None, None
+        return target_path, target_prim
+
+    def _apply_translation(self, target_prim, delta_xyz, tc) -> None:
+        """Translate target_prim by delta_xyz in world space."""
+        from pxr import Gf  # type: ignore
+        current_world = self._world_xform(target_prim, tc)
+        row3 = current_world.GetRow3(3)
+        new_world = Gf.Matrix4d(current_world)
+        new_world.SetRow3(
+            3,
+            Gf.Vec3d(
+                float(row3[0]) + float(delta_xyz[0]),
+                float(row3[1]) + float(delta_xyz[1]),
+                float(row3[2]) + float(delta_xyz[2]),
+            ),
+        )
+        parent = target_prim.GetParent()
+        if parent is None or parent.IsPseudoRoot():
+            parent_world = Gf.Matrix4d(1.0)
+        else:
+            parent_world = self._world_xform(parent, tc)
+        new_local = parent_world.GetInverse() * new_world
+        self._set_xform_matrix(target_prim, new_local)
+
+    def _apply_rotation_about_origin(self, target_prim, axis_vec, angle_deg, tc) -> None:
+        """Rotate target_prim by angle_deg about axis_vec, pivoting on its
+        current world-space origin (so the part spins in place)."""
+        from pxr import Gf  # type: ignore
+        current_world = self._world_xform(target_prim, tc)
+        pos = current_world.GetRow3(3)
+        rot = Gf.Matrix4d(1.0).SetRotate(Gf.Rotation(axis_vec, float(angle_deg)))
+        to_origin = Gf.Matrix4d(1.0).SetTranslate(
+            Gf.Vec3d(-float(pos[0]), -float(pos[1]), -float(pos[2]))
+        )
+        from_origin = Gf.Matrix4d(1.0).SetTranslate(
+            Gf.Vec3d(float(pos[0]), float(pos[1]), float(pos[2]))
+        )
+        new_world = from_origin * rot * to_origin * current_world
+        parent = target_prim.GetParent()
+        if parent is None or parent.IsPseudoRoot():
+            parent_world = Gf.Matrix4d(1.0)
+        else:
+            parent_world = self._world_xform(parent, tc)
+        new_local = parent_world.GetInverse() * new_world
+        self._set_xform_matrix(target_prim, new_local)
+
+    def flip(self, part_name: str, axis: str = "x",
+             seat: bool = False, surface: object = "table", margin: float = 0.005) -> bool:
+        """Rotate 180° about world X (default) or Y to invert the part's Z direction.
+        Magic-mode-only; not robot-executable.
+
+        When `seat` is True, re-seat the part onto `surface` afterwards (flipping
+        changes which face is down, so the part would otherwise float/clip). The
+        seat Δz is folded into the undo record so one /undo reverses both."""
+        from pxr import Gf  # type: ignore
+        self._log(f"[MAGIC] flip START: part={part_name!r}, axis={axis!r}, seat={seat}")
+        stage = self._stage_fn()
+        if stage is None:
+            self._log("[MAGIC] flip FAIL: stage not available")
+            return False
+        target_path, target_prim = self._resolve_target(stage, part_name)
+        if target_prim is None:
+            return False
+        ax = axis.lower().strip()
+        if ax not in ("x", "y"):
+            self._log(f"[MAGIC] flip FAIL: axis must be 'x' or 'y', got {axis!r}")
+            return False
+        axis_vec = Gf.Vec3d(1.0, 0.0, 0.0) if ax == "x" else Gf.Vec3d(0.0, 1.0, 0.0)
+        tc = self._time_code(stage)
+        self._apply_rotation_about_origin(target_prim, axis_vec, 180.0, tc)
+        seat_dz = self._maybe_seat(stage, target_prim, seat, surface, margin, tc, "flip")
+        self._log(f"[MAGIC] flip OK: '{target_path}' 180° about {ax.upper()}")
+        self._push_undo("flip", part_name=part_name, axis=ax, seat_dz=seat_dz)
+        return True
+
+    def rotate(self, part_name: str, angle_deg: float = 45.0, axis: str = "z") -> bool:
+        """Rotate the part by `angle_deg` about world `axis` (default Z, +45°)."""
+        from pxr import Gf  # type: ignore
+        self._log(f"[MAGIC] rotate START: part={part_name!r}, angle={angle_deg}, axis={axis!r}")
+        stage = self._stage_fn()
+        if stage is None:
+            self._log("[MAGIC] rotate FAIL: stage not available")
+            return False
+        target_path, target_prim = self._resolve_target(stage, part_name)
+        if target_prim is None:
+            return False
+        ax = axis.lower().strip()
+        axis_map = {
+            "x": Gf.Vec3d(1.0, 0.0, 0.0),
+            "y": Gf.Vec3d(0.0, 1.0, 0.0),
+            "z": Gf.Vec3d(0.0, 0.0, 1.0),
+        }
+        if ax not in axis_map:
+            self._log(f"[MAGIC] rotate FAIL: axis must be x/y/z, got {axis!r}")
+            return False
+        tc = self._time_code(stage)
+        self._apply_rotation_about_origin(target_prim, axis_map[ax], float(angle_deg), tc)
+        self._log(f"[MAGIC] rotate OK: '{target_path}' {angle_deg}° about {ax.upper()}")
+        self._push_undo("rotate", part_name=part_name,
+                        angle_deg=float(angle_deg), axis=ax)
+        return True
+
+    def pick_up(self, part_name: str, height: float = 0.15) -> bool:
+        """Translate the part +Z by `height` meters (default 15 cm).
+        Soft precondition: warns if part already appears lifted (z > 0.5 m above floor)."""
+        self._log(f"[MAGIC] pick_up START: part={part_name!r}, height={height}")
+        stage = self._stage_fn()
+        if stage is None:
+            self._log("[MAGIC] pick_up FAIL: stage not available")
+            return False
+        target_path, target_prim = self._resolve_target(stage, part_name)
+        if target_prim is None:
+            return False
+        tc = self._time_code(stage)
+        # Soft precondition: warn (don't block) if part doesn't look table-bound.
+        current_z = float(self._world_xform(target_prim, tc).GetRow3(3)[2])
+        if current_z > 0.5 and current_z < 2.30:
+            self._log(
+                f"[MAGIC] pick_up WARN: part at z={current_z:.3f} doesn't look "
+                f"like it's resting on table or floor — proceeding anyway"
+            )
+        self._apply_translation(target_prim, (0.0, 0.0, float(height)), tc)
+        self._log(f"[MAGIC] pick_up OK: '{target_path}' +Z {height} m")
+        self._push_undo("pick_up", part_name=part_name, height=float(height))
+        return True
+
+    # Named locations recognized by move() / its shortcuts. Tuple components
+    # of None mean "preserve the part's current value on that axis".
+    _NAMED_LOCATIONS: Dict[str, tuple] = {
+        "center":              (0.0, -0.85, None),
+        "center_of_operation": (0.0, -0.85, None),
+        "working_area":        (0.0, -0.85, None),
+        "front_of_robot":      (0.0, -0.85, None),
+        "side":                (1.50,  1.50, None),
+        "off_center":          (1.50,  1.50, None),
+        "left":                (-1.50, 1.50, None),
+        "right":               (1.50,  1.50, None),
+        "table":               (None, None, -0.1),  # workbench surface (tabletop ≈ -0.09)
+        "floor":               (None, None, 0.02),  # ground level
+    }
+
+    def _resolve_point(self, point: object, current_pos: tuple) -> Optional[tuple]:
+        """Resolve a point spec to an (x, y, z) tuple. Accepts:
+        - None or 'current' → returns current_pos
+        - a named-location string (case-insensitive, see _NAMED_LOCATIONS)
+        - a 3-tuple / 3-list of numbers → used as absolute world coords
+        Returns None on failure (and the caller should log)."""
+        cx, cy, cz = current_pos
+        if point is None:
+            return (cx, cy, cz)
+        if isinstance(point, str):
+            key = point.strip().lower()
+            if key == "current" or key == "":
+                return (cx, cy, cz)
+            loc = self._NAMED_LOCATIONS.get(key)
+            if loc is None:
+                return None
+            x, y, z = loc
+            return (cx if x is None else x,
+                    cy if y is None else y,
+                    cz if z is None else z)
+        if isinstance(point, (list, tuple)) and len(point) == 3:
+            try:
+                return (float(point[0]), float(point[1]), float(point[2]))
+            except (TypeError, ValueError):
+                return None
+        return None
+
+    def move(self, part_name: str, point_1: object, point_2: object = None) -> bool:
+        """General movement primitive. Translates the part to a destination point.
+
+        Argument conventions (matching the spec in docs/commands_description.md):
+        - move(part, dest): teleport from current position to `dest`.
+        - move(part, src, dest): teleport to `dest`. `src` is sanity-checked
+          against the current position; a >10 cm mismatch logs a WARN but
+          does not block the move.
+
+        Points accepted: 'current', a named location, or a 3-tuple of coords.
+        See _NAMED_LOCATIONS for known names."""
+        self._log(f"[MAGIC] move START: part={part_name!r}, p1={point_1!r}, p2={point_2!r}")
+        stage = self._stage_fn()
+        if stage is None:
+            self._log("[MAGIC] move FAIL: stage not available")
+            return False
+        target_path, target_prim = self._resolve_target(stage, part_name)
+        if target_prim is None:
+            return False
+
+        tc = self._time_code(stage)
+        row = self._world_xform(target_prim, tc).GetRow3(3)
+        current_pos = (float(row[0]), float(row[1]), float(row[2]))
+
+        if point_2 is None:
+            dest = self._resolve_point(point_1, current_pos)
+            if dest is None:
+                self._log(f"[MAGIC] move FAIL: cannot resolve destination {point_1!r}")
+                return False
+        else:
+            src = self._resolve_point(point_1, current_pos)
+            dest = self._resolve_point(point_2, current_pos)
+            if src is None:
+                self._log(f"[MAGIC] move FAIL: cannot resolve source {point_1!r}")
+                return False
+            if dest is None:
+                self._log(f"[MAGIC] move FAIL: cannot resolve destination {point_2!r}")
+                return False
+            # Sanity check: source should approximately match current position.
+            if not (isinstance(point_1, str) and point_1.strip().lower() in ("", "current")):
+                dx = abs(src[0] - current_pos[0])
+                dy = abs(src[1] - current_pos[1])
+                dz = abs(src[2] - current_pos[2])
+                if dx + dy + dz > 0.10:
+                    self._log(
+                        f"[MAGIC] move WARN: source {point_1!r} resolves to {src} "
+                        f"but part is at {current_pos} — proceeding"
+                    )
+
+        delta = (
+            dest[0] - current_pos[0],
+            dest[1] - current_pos[1],
+            dest[2] - current_pos[2],
+        )
+        self._apply_translation(target_prim, delta, tc)
+        self._log(
+            f"[MAGIC] move OK: '{target_path}' {current_pos} -> {dest} "
+            f"(delta={tuple(round(d, 4) for d in delta)})"
+        )
+        self._push_undo("move", part_name=part_name, delta_xyz=delta)
+        return True
+
+    def put_down(self, part_name: str, drop: float = 0.15,
+                 seat: bool = False, surface: object = "table", margin: float = 0.005) -> bool:
+        """Translate the part -Z by `drop` meters (default 15 cm). Symmetric inverse
+        of pick_up. Soft precondition: warns if part is already at/below floor.
+
+        When `seat` is True, re-seat the part onto `surface` afterwards so it ends
+        up resting exactly on the surface regardless of `drop`. The seat Δz is
+        folded into the undo record so one /undo reverses both."""
+        self._log(f"[MAGIC] put_down START: part={part_name!r}, drop={drop}, seat={seat}")
+        stage = self._stage_fn()
+        if stage is None:
+            self._log("[MAGIC] put_down FAIL: stage not available")
+            return False
+        target_path, target_prim = self._resolve_target(stage, part_name)
+        if target_prim is None:
+            return False
+        tc = self._time_code(stage)
+        current_z = float(self._world_xform(target_prim, tc).GetRow3(3)[2])
+        if current_z <= 0.02 + 0.02:
+            self._log(
+                f"[MAGIC] put_down WARN: part at z={current_z:.3f} is not "
+                f"clearly above a surface (>2 cm) — proceeding anyway"
+            )
+        self._apply_translation(target_prim, (0.0, 0.0, -float(drop)), tc)
+        seat_dz = self._maybe_seat(stage, target_prim, seat, surface, margin, tc, "put_down")
+        self._log(f"[MAGIC] put_down OK: '{target_path}' -Z {drop} m")
+        self._push_undo("put_down", part_name=part_name, drop=float(drop), seat_dz=seat_dz)
+        return True
+
+    # Hardcoded fallbacks (world metres) used only if config import fails.
+    # The real tabletop mesh top measures ≈ -0.091; -0.1 matches the canonical
+    # tools/scatter_parts.py TABLE_SURFACE_Z. Detection (below) supersedes these.
+    _SURFACE_Z_FALLBACK: Dict[str, float] = {"table": -0.1, "floor": 0.02}
+
+    def _surface_fallback(self, key: str) -> float:
+        """Fallback surface height, preferring runtime.config over the literal."""
+        try:
+            from runtime import config  # deferred; config has no USD imports
+            if key == "table":
+                return float(config.TABLE_SURFACE_Z)
+            if key == "floor":
+                return float(config.FLOOR_SURFACE_Z)
+        except Exception:
+            pass
+        return self._SURFACE_Z_FALLBACK[key]
+
+    def _table_surface_top_z(self, stage) -> Optional[float]:
+        """World Z of the tabletop face, detected from the scene.
+
+        Descends to the tabletop *mesh* rather than using the table Xform's
+        bound, so props resting on the table don't inflate the surface height.
+        Strategy: (1) if config.TABLE_PRIM_PATH points at a gprim, use its top;
+        (2) else search that prim's subtree (or the whole stage) for a Mesh
+        whose own name mentions 'table' and take the highest such top.
+        Returns None if no tabletop mesh is found.
+        """
+        from pxr import Usd, UsdGeom  # type: ignore
+
+        try:
+            from runtime import config  # deferred; config has no USD imports
+            table_path = config.TABLE_PRIM_PATH
+        except Exception:
+            table_path = ""
+
+        tc = self._time_code(stage)
+        cache = UsdGeom.BBoxCache(tc, includedPurposes=[UsdGeom.Tokens.default_])
+
+        def _top(prim):
+            rng = cache.ComputeWorldBound(prim).ComputeAlignedRange()
+            return None if rng.IsEmpty() else float(rng.GetMax()[2])
+
+        scope = stage.GetPrimAtPath(table_path) if table_path else None
+        scope_valid = scope is not None and scope.IsValid()
+
+        # (1) Configured prim is itself renderable geometry → use it directly.
+        if scope_valid and scope.IsA(UsdGeom.Gprim):
+            z = _top(scope)
+            if z is not None:
+                return z
+
+        # (2) Search for a tabletop mesh by name.
+        prims = Usd.PrimRange(scope) if scope_valid else stage.Traverse()
+        best = None
+        for prim in prims:
+            if not prim.IsA(UsdGeom.Mesh):
+                continue
+            if "table" not in prim.GetName().lower():
+                continue
+            z = _top(prim)
+            if z is not None and (best is None or z > best):
+                best = z
+        return best
+
+    def _resolve_surface_z(self, stage, surface: object) -> Optional[float]:
+        """Resolve the world Z that a hovered part's bottom should rest on.
+
+        Accepts:
+        - a raw number (int/float) → used directly as the surface height;
+        - "table" → detected tabletop mesh top (see _table_surface_top_z),
+          self-correcting across scene files; falls back to the config /
+          literal table constant if no tabletop mesh is found;
+        - "floor" → config / literal floor constant.
+        Returns None on an unknown surface name (caller logs and aborts).
+        """
+        if isinstance(surface, (int, float)) and not isinstance(surface, bool):
+            return float(surface)
+
+        key = str(surface).strip().lower()
+        if key == "table":
+            detected = self._table_surface_top_z(stage)
+            if detected is not None:
+                return detected
+            fb = self._surface_fallback("table")
+            self._log(f"[MAGIC] hover: no tabletop mesh found — using fallback z={fb}")
+            return fb
+        if key == "floor":
+            return self._surface_fallback("floor")
+        return None
+
+    def _seat_on_surface(self, stage, target_prim, surface, margin, tc):
+        """Translate target_prim along world Z so its world-AABB bottom rests at
+        surface_z + margin (preserving X, Y and orientation). Shared core of
+        hover() and the auto-seat used by flip/upright/put_down.
+
+        Returns (Δz, surface_z, before_min_z), or None on failure (unknown
+        surface or empty bounding box)."""
+        from pxr import UsdGeom  # type: ignore
+        surface_z = self._resolve_surface_z(stage, surface)
+        if surface_z is None:
+            self._log(f"[MAGIC] seat FAIL: unknown surface {surface!r} (use 'table', 'floor', or a number)")
+            return None
+        cache = UsdGeom.BBoxCache(tc, includedPurposes=[UsdGeom.Tokens.default_])
+        rng = cache.ComputeWorldBound(target_prim).ComputeAlignedRange()
+        if rng.IsEmpty():
+            self._log("[MAGIC] seat FAIL: target has no renderable geometry (empty bbox)")
+            return None
+        before_min_z = float(rng.GetMin()[2])
+        delta_z = (float(surface_z) + float(margin)) - before_min_z
+        self._apply_translation(target_prim, (0.0, 0.0, delta_z), tc)
+        return (delta_z, float(surface_z), before_min_z)
+
+    def _maybe_seat(self, stage, target_prim, seat, surface, margin, tc, label):
+        """Auto-seat helper for flip/upright/put_down. When `seat` is True, drop
+        the part onto `surface` and return the applied Δz (0.0 if seating was
+        skipped or unavailable)."""
+        if not seat:
+            return 0.0
+        res = self._seat_on_surface(stage, target_prim, surface, margin, tc)
+        if res is None:
+            self._log(f"[MAGIC] {label}: auto-seat skipped (surface/bbox unavailable)")
+            return 0.0
+        self._log(f"[MAGIC] {label}: auto-seated onto {surface!r} Δz={res[0]:.3f}")
+        return res[0]
+
+    def _apply_unseat(self, part_name, seat_dz) -> None:
+        """Reverse a folded auto-seat: translate the part by -seat_dz in Z.
+        Pure translation, pushes no undo record (used inside undo reversers)."""
+        if not seat_dz:
+            return
+        stage = self._stage_fn()
+        if stage is None:
+            return
+        tp, tprim = self._resolve_target(stage, part_name)
+        if tprim is None:
+            return
+        self._apply_translation(tprim, (0.0, 0.0, -float(seat_dz)), self._time_code(stage))
+        self._log(f"[MAGIC] unseat: '{tp}' Δz={-float(seat_dz):.3f}")
+
+    def hover(self, part_name: str, surface: object = "table", margin: float = 0.005) -> bool:
+        """Translate a part along world Z only so its lowest point rests just
+        above a surface (small clearance), preserving X, Y and orientation.
+
+        `surface` is "table" (detected from the tabletop mesh), "floor", or a
+        raw number used directly as the target surface height. `margin` is the
+        clearance gap above the surface (default 5 mm). Magic-mode-only."""
+        self._log(f"[MAGIC] hover START: part={part_name!r}, surface={surface!r}, margin={margin}")
+        stage = self._stage_fn()
+        if stage is None:
+            self._log("[MAGIC] hover FAIL: stage not available")
+            return False
+        target_path, target_prim = self._resolve_target(stage, part_name)
+        if target_prim is None:
+            return False
+
+        tc = self._time_code(stage)
+        res = self._seat_on_surface(stage, target_prim, surface, margin, tc)
+        if res is None:
+            self._log(f"[MAGIC] hover FAIL: could not seat '{target_path}'")
+            return False
+        delta_z, surface_z, before_min_z = res
+        self._log(
+            f"[MAGIC] hover OK: '{target_path}' bottom z {before_min_z:.3f} -> "
+            f"{before_min_z + delta_z:.3f} (Δz={delta_z:.3f}, surface={surface!r}@{surface_z:.3f})"
+        )
+        self._push_undo("hover", part_name=part_name, delta_xyz=(0.0, 0.0, delta_z))
+        return True
+
+    def undo(self) -> bool:
+        """Reverse the most recent recorded action. Returns False if nothing to undo
+        or if the action type has no defined reverser."""
+        if not self._undo_stack:
+            self._log("[MAGIC] undo: nothing to undo")
+            return False
+        rec = self._undo_stack.pop()
+        action = str(rec.get("action") or "")
+        self._log(f"[MAGIC] undo START: action={action!r}")
+
+        # When the reverser action itself pushes a new undo record, pop it so
+        # the undo stack reflects pre-action state, not undo-action state.
+        before_n = len(self._undo_stack)
+
+        def _trim_and_log(ok: bool, label: str) -> bool:
+            if len(self._undo_stack) > before_n:
+                self._undo_stack.pop()
+            self._log(f"[MAGIC] undo {label}: {'OK' if ok else 'FAILED'}")
+            return ok
+
+        try:
+            if action == "combine":
+                # Reverse combine by separating the child.
+                child = str(rec.get("child_name") or "")
+                return _trim_and_log(self.separate(child), "combine→separate")
+            if action == "focus":
+                part = str(rec.get("part_name") or "")
+                return _trim_and_log(self.unfocus(part), "focus→unfocus")
+            if action == "unfocus":
+                part = str(rec.get("part_name") or "")
+                return _trim_and_log(self.focus(part), "unfocus→focus")
+            if action == "upright":
+                part = str(rec.get("part_name") or "")
+                axis = str(rec.get("axis") or "x")
+                seat_dz = float(rec.get("seat_dz") or 0.0)
+                ok = self.rotate(part, -90.0, axis)
+                if ok:
+                    self._apply_unseat(part, seat_dz)  # reverse folded auto-seat
+                return _trim_and_log(ok, f"upright→rotate-90-{axis.upper()}")
+            if action == "flip":
+                part = str(rec.get("part_name") or "")
+                axis = str(rec.get("axis") or "x")
+                seat_dz = float(rec.get("seat_dz") or 0.0)
+                # 180° is self-inverse; rotate by +180° to revert, then unseat.
+                ok = self.rotate(part, 180.0, axis)
+                if ok:
+                    self._apply_unseat(part, seat_dz)
+                return _trim_and_log(ok, "flip→rotate-180")
+            if action == "rotate":
+                part = str(rec.get("part_name") or "")
+                angle = float(rec.get("angle_deg") or 0.0)
+                axis = str(rec.get("axis") or "z")
+                return _trim_and_log(self.rotate(part, -angle, axis), "rotate→rotate-inverse")
+            if action == "pick_up":
+                part = str(rec.get("part_name") or "")
+                h = float(rec.get("height") or 0.15)
+                return _trim_and_log(self.put_down(part, h), "pick_up→put_down")
+            if action == "put_down":
+                part = str(rec.get("part_name") or "")
+                d = float(rec.get("drop") or 0.15)
+                seat_dz = float(rec.get("seat_dz") or 0.0)
+                self._apply_unseat(part, seat_dz)  # reverse folded auto-seat first (pure Z)
+                return _trim_and_log(self.pick_up(part, d), "put_down→pick_up")
+            if action == "move":
+                # Reverse a move by applying the inverse translation directly.
+                # Going through self.move would require rebuilding a point spec;
+                # the raw apply_translation call is simpler and equally correct.
+                part = str(rec.get("part_name") or "")
+                delta = rec.get("delta_xyz") or (0.0, 0.0, 0.0)
+                inv = (-float(delta[0]), -float(delta[1]), -float(delta[2]))
+                stage2 = self._stage_fn()
+                if stage2 is None:
+                    return _trim_and_log(False, "move undo (no stage)")
+                tp, tprim = self._resolve_target(stage2, part)
+                if tprim is None:
+                    return _trim_and_log(False, "move undo (target gone)")
+                self._apply_translation(tprim, inv, self._time_code(stage2))
+                self._log(f"[MAGIC] move undo: '{tp}' inverse-translate {inv}")
+                return _trim_and_log(True, "move→inverse-translate")
+            if action == "hover":
+                # Reverse a hover by applying the inverse Z translation directly
+                # (same mechanism as move undo).
+                part = str(rec.get("part_name") or "")
+                delta = rec.get("delta_xyz") or (0.0, 0.0, 0.0)
+                inv = (-float(delta[0]), -float(delta[1]), -float(delta[2]))
+                stage2 = self._stage_fn()
+                if stage2 is None:
+                    return _trim_and_log(False, "hover undo (no stage)")
+                tp, tprim = self._resolve_target(stage2, part)
+                if tprim is None:
+                    return _trim_and_log(False, "hover undo (target gone)")
+                self._apply_translation(tprim, inv, self._time_code(stage2))
+                self._log(f"[MAGIC] hover undo: '{tp}' inverse-translate {inv}")
+                return _trim_and_log(True, "hover→inverse-translate")
+            if action == "stage":
+                # Reverse a stage by restoring the pre-stage local pose.
+                part = str(rec.get("part_name") or "")
+                pre_local = rec.get("pre_local")
+                stage2 = self._stage_fn()
+                if stage2 is None:
+                    return _trim_and_log(False, "stage undo (no stage)")
+                tp, tprim = self._resolve_target(stage2, part)
+                if tprim is None or pre_local is None:
+                    return _trim_and_log(False, "stage undo (target/pose gone)")
+                self._set_xform_matrix(tprim, pre_local)
+                self._log(f"[MAGIC] stage undo: '{tp}' restored pre-stage pose")
+                return _trim_and_log(True, "stage→restore-pose")
+            self._log(f"[MAGIC] undo: no reverser defined for action={action!r}")
+            return False
+        except Exception as exc:
+            self._log(f"[MAGIC] undo error: {exc}")
+            return False
 
     def _resolve_focus_target_path(self, stage, part_path):
         """Return the top-level assembly node that should move when focusing a part."""
@@ -1343,6 +2132,50 @@ class MagicAssemblyManager:
         except Exception:
             return None
 
+    def _registry_synonyms(self, name: str) -> List[str]:
+        """Return synonym names for *name* from asset_registry.yaml.
+
+        Each registry entry's ``name``, ``alternate_names``, and the basename
+        of its ``prim_path`` form a clique — querying any one returns the
+        others. Loaded lazily on first call. Empty list if the registry is
+        unreadable.
+        """
+        if self._registry_aliases is None:
+            self._registry_aliases = self._load_registry_aliases()
+        return self._registry_aliases.get(name, [])
+
+    def _load_registry_aliases(self) -> Dict[str, List[str]]:
+        try:
+            import yaml  # type: ignore
+            from pathlib import Path
+        except Exception:
+            return {}
+        path = Path(__file__).resolve().parent.parent / "assembly" / "asset_registry.yaml"
+        try:
+            data = yaml.safe_load(path.read_text())
+        except Exception as exc:
+            self._log(f"[MAGIC] registry alias load failed: {exc}")
+            return {}
+        aliases: Dict[str, List[str]] = {}
+        for entry in (data or {}).get("parts", []) or []:
+            clique: List[str] = []
+            n = entry.get("name")
+            if n:
+                clique.append(n)
+            clique.extend(a for a in (entry.get("alternate_names") or []) if a)
+            pp = entry.get("prim_path") or ""
+            if pp:
+                base = pp.rstrip("/").split("/")[-1]
+                if base:
+                    clique.append(base)
+            clique = list(dict.fromkeys(clique))  # dedupe, preserve order
+            for n in clique:
+                bucket = aliases.setdefault(n, [])
+                for m in clique:
+                    if m != n and m not in bucket:
+                        bucket.append(m)
+        return aliases
+
     def _find_prim_path(self, stage, name: str):
         """Search the stage for a prim whose name matches *name*.
 
@@ -1354,6 +2187,13 @@ class MagicAssemblyManager:
         1. Prefer the prim that is **not** already tracked in ``_records``
            (i.e. not already combined into an assembly).
         2. Among remaining candidates, prefer the **shallowest** path.
+
+        If the direct name has no match, falls back to synonyms declared in
+        ``assembly/asset_registry.yaml`` (name + alternate_names + prim_path
+        basename of the same entry form a clique). This bridges drift between
+        canonical YAML names and actual scene prim names — add the scene
+        variant to an entry's ``alternate_names`` instead of editing the
+        sequence YAML.
 
         Returns None when no match is found.
         """
@@ -1371,10 +2211,18 @@ class MagicAssemblyManager:
 
         # Search by last path component
         target = name.rstrip("/").split("/")[-1]
-        matches = []
-        for prim in stage.Traverse():
-            if prim.GetName() == target:
-                matches.append(prim.GetPath())
+        matches = [p.GetPath() for p in stage.Traverse() if p.GetName() == target]
+
+        if not matches:
+            for alt in self._registry_synonyms(target):
+                alt_matches = [p.GetPath() for p in stage.Traverse() if p.GetName() == alt]
+                if alt_matches:
+                    self._log(
+                        f"[MAGIC] _find_prim_path: '{target}' not in stage; "
+                        f"matched via registry alias '{alt}'"
+                    )
+                    matches = alt_matches
+                    break
 
         if not matches:
             return None

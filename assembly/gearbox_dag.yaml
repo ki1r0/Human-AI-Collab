@@ -1,0 +1,97 @@
+# Gearbox Assembly DAG — generic procedural knowledge (no prim names).
+# Operations reference part SETS (registry queries); assembly/instantiate.py binds
+# concrete prims/plugs/sockets from asset_registry.yaml and emits instances.
+# See docs/superpowers/specs/2026-06-05-dag-instantiator-design.md
+meta:
+  version: "2.0"
+  assembly: I2R_Gearbox
+  registry: assembly/asset_registry.yaml
+
+phases:
+  - {id: phase_0, name: "Scene Setup"}
+  - {id: phase_1, name: "Base Half Preparation"}
+  - {id: phase_2, name: "Top Half Preparation"}
+  - {id: phase_3, name: "Base Half Assembly"}
+  - {id: phase_4, name: "Casing Mate"}
+  - {id: phase_5, name: "Casing Fasteners"}
+  - {id: phase_6, name: "Accessories"}
+
+streams:
+  - {id: setup,         phases: [phase_0], can_parallel_with: []}
+  - {id: base_prep,     phases: [phase_1], can_parallel_with: [top_prep]}
+  - {id: top_prep,      phases: [phase_2], can_parallel_with: [base_prep, base_assembly]}
+  - {id: base_assembly, phases: [phase_3], can_parallel_with: [top_prep]}
+  - {id: mate,          phases: [phase_4], can_parallel_with: []}
+  - {id: fasteners,     phases: [phase_5], can_parallel_with: [accessories]}
+  - {id: accessories,   phases: [phase_6], can_parallel_with: [fasteners]}
+
+sets:
+  base_hub_covers: {role: cover,    parent: Casing_Base}
+  top_hub_covers:  {role: cover,    parent: Casing_Top}
+  base_m6_bolts:   {role: fastener, parent: Casing_Base, name_prefix: M6_Hub_Bolt}
+  top_m6_bolts:    {role: fastener, parent: Casing_Top,  name_prefix: M6_Hub_Bolt}
+  shafts:          {role: shaft,    parent: Casing_Base}
+  m10_bolts:       {role: fastener, parent: Casing_Top,  name_prefix: M10_Casing_Bolt}
+  accessories:     {role: accessory, parent: Casing_Base}
+
+cover_bolt_binding:
+  Hub_Cover_Output_Base:   [1, 2, 3, 4]
+  Hub_Cover_Small_Base_01: [5, 6, 7, 8]
+  Hub_Cover_Small_Base_02: [9, 10, 11, 12]
+  Hub_Cover_Output_Top:    [1, 2, 3, 4]
+  Hub_Cover_Input_Top:     [5, 6, 7, 8]
+  Hub_Cover_Small_Top:     [9, 10, 11, 12]
+
+operations:
+  - {id: op_validate_scene, phase: phase_0, stream: setup, action: inspect,
+     preconditions: [], pose_check: []}
+
+  - {id: op_focus_base, phase: phase_1, stream: base_prep, action: focus,
+     target: Casing_Base, preconditions: [op_validate_scene], pose_check: []}
+  - {id: op_install_base_covers, phase: phase_1, stream: base_prep, action: combine,
+     child_set: base_hub_covers, parent: Casing_Base,
+     interchangeable: true, preconditions: [op_focus_base], pose_check: [Casing_Base]}
+  - {id: op_install_base_m6_bolts, phase: phase_1, stream: base_prep, action: combine,
+     child_set: base_m6_bolts, parent: Casing_Base,
+     interchangeable: true, bind_each_to_cover: true,
+     preconditions: [op_install_base_covers], pose_check: []}
+  - {id: op_unfocus_base, phase: phase_1, stream: base_prep, action: unfocus,
+     target: Casing_Base, preconditions: [op_install_base_m6_bolts], pose_check: []}
+
+  - {id: op_focus_top, phase: phase_2, stream: top_prep, action: focus,
+     target: Casing_Top, preconditions: [op_validate_scene], pose_check: []}
+  - {id: op_install_top_covers, phase: phase_2, stream: top_prep, action: combine,
+     child_set: top_hub_covers, parent: Casing_Top,
+     interchangeable: true, preconditions: [op_focus_top], pose_check: [Casing_Top]}
+  - {id: op_install_top_m6_bolts, phase: phase_2, stream: top_prep, action: combine,
+     child_set: top_m6_bolts, parent: Casing_Top,
+     interchangeable: true, bind_each_to_cover: true,
+     preconditions: [op_install_top_covers], pose_check: []}
+  - {id: op_unfocus_top, phase: phase_2, stream: top_prep, action: unfocus,
+     target: Casing_Top, preconditions: [op_install_top_m6_bolts], pose_check: []}
+
+  - {id: op_refocus_base, phase: phase_3, stream: base_assembly, action: focus,
+     target: Casing_Base, preconditions: [op_unfocus_base], pose_check: []}
+  - {id: op_stage_shafts, phase: phase_3, stream: base_assembly, action: stage,
+     child_set: shafts, parent: Casing_Base, hover_m: 0.15,
+     interchangeable: true, simultaneous: true, preconditions: [op_refocus_base],
+     pose_check: [Casing_Base, Output_Shaft, Input_Shaft, Transfer_Shaft]}
+  - {id: op_insert_shafts, phase: phase_3, stream: base_assembly, action: combine,
+     child_set: shafts, parent: Casing_Base,
+     interchangeable: true, simultaneous: true, preconditions: [op_stage_shafts],
+     pose_check: []}
+
+  - {id: op_mate_top, phase: phase_4, stream: mate, action: combine,
+     target: Casing_Top, parent: Casing_Base,
+     preconditions: [op_insert_shafts, op_unfocus_top], pose_check: []}
+
+  - {id: op_upright_base, phase: phase_5, stream: fasteners, action: upright,
+     target: Casing_Base, axis: x, preconditions: [op_mate_top], pose_check: []}
+  - {id: op_install_m10_pairs, phase: phase_5, stream: fasteners, action: combine,
+     child_set: m10_bolts, parent: Casing_Top,
+     interchangeable: true, simultaneous: pairs, emit_paired_nut: true,
+     preconditions: [op_upright_base], pose_check: []}
+
+  - {id: op_install_accessories, phase: phase_6, stream: accessories, action: combine,
+     child_set: accessories, parent: Casing_Base,
+     interchangeable: true, preconditions: [op_mate_top], pose_check: [Casing_Base]}

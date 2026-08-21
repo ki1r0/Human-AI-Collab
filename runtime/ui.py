@@ -373,6 +373,283 @@ def _ensure_asset_browser_cache_dir() -> None:
         pass
 
 
+def _ensure_magic_assembly_once() -> None:
+    """Initialize the magic assembly manager lazily for slash commands and startup."""
+    if STATE.magic_assembly is not None:
+        return
+
+    from .magic_assembly import MagicAssemblyManager
+
+    STATE.magic_assembly = MagicAssemblyManager(logger=lambda m: log_line("INFO ", m))
+    try:
+        created = STATE.magic_assembly.ensure_extra_hub_bolt_assets()
+        if created.get("bolts", 0) or created.get("sockets", 0):
+            log_line(
+                "INFO ",
+                "Extra hub-bolt assets ensured "
+                f"(bolts={created.get('bolts', 0)}, sockets={created.get('sockets', 0)})",
+            )
+    except Exception as exc:
+        log_line("WARN ", f"Failed to ensure extra hub-bolt assets: {exc}")
+    try:
+        created = STATE.magic_assembly.ensure_case_attachment_assets()
+        if any(created.values()):
+            log_line(
+                "INFO ",
+                "Case assets ensured "
+                f"(bolts={created.get('bolts', 0)}, oils={created.get('oils', 0)}, "
+                f"top_sockets={created.get('top_sockets', 0)}, "
+                f"base_alias_sockets={created.get('base_alias_sockets', 0)})",
+            )
+    except Exception as exc:
+        log_line("WARN ", f"Failed to ensure case attachment assets: {exc}")
+
+
+def _ui_pose_resolver(child: str, step_id: str):
+    """Pose resolver for the SequenceRunner, routed through the chat UI.
+
+    A check_pose step cannot prompt synchronously: the runner executes on the
+    Kit main thread, so blocking here would freeze the very thread that delivers
+    the answer. Instead we log the question and return None, which tells the
+    runner to pause the run (recording pending_pose). The operator types Y/N in
+    the chat box; on_send() routes that to runner.answer_pose() and re-dispatches
+    the paused command (STATE.pose_resume_cmd) to resume.
+    """
+    log_line("INFO ", f"[POSE?] Is '{child}' correctly posed? Reply Y / N "
+                      f"(or /pose_yes // pose_no)")
+    return None
+
+
+def _parse_pose_answer(text: str):
+    """Map chat input to a pose answer: True (yes), False (no), or None (neither)."""
+    t = (text or "").strip().lower()
+    if t in ("y", "yes", "/pose_yes"):
+        return True
+    if t in ("n", "no", "/pose_no"):
+        return False
+    return None
+
+
+def _run_with_pose_pause(text: str, run_fn):
+    """Invoke a runner run method, remembering the command so a deferred
+    check_pose can be resumed after the operator answers.
+
+    Sets STATE.pose_resume_cmd before running; clears it if the run did not
+    pause (so a normal completion leaves no stale resume target). Returns the
+    run method's own return value. Caller checks STATE.sequence_runner.pending_pose
+    to decide whether to log a normal completion message."""
+    STATE.pose_resume_cmd = text
+    result = run_fn()
+    sr = STATE.sequence_runner
+    if sr is None or sr.pending_pose is None:
+        STATE.pose_resume_cmd = None
+    return result
+
+
+def _ensure_sequence_runner_once() -> None:
+    """Initialize the SequenceRunner lazily, after magic_assembly is ready."""
+    if STATE.sequence_runner is not None:
+        return
+    _ensure_magic_assembly_once()
+    if STATE.magic_assembly is None:
+        log_line("WARN ", "[SEQ] cannot init SequenceRunner: magic_assembly not ready")
+        return
+    try:
+        from assembly import SequenceRunner
+        runner = SequenceRunner(
+            magic_assembly=STATE.magic_assembly,
+            log_fn=log_line,
+        )
+        runner.set_pose_resolver(_ui_pose_resolver)
+        if runner.load():
+            STATE.sequence_runner = runner
+        else:
+            log_line("WARN ", "[SEQ] SequenceRunner.load() failed")
+    except Exception as exc:
+        log_line("WARN ", f"[SEQ] SequenceRunner init error: {exc}")
+
+
+def _load_instance_runner(variant: str) -> bool:
+    """Rebuild the SequenceRunner pointed at a generated instance file
+    (assembly/instances/<variant>.yaml) instead of the canonical sequence.
+    Returns True on success."""
+    from pathlib import Path
+
+    _ensure_magic_assembly_once()
+    if STATE.magic_assembly is None:
+        log_line("WARN ", "[SEQ] cannot load instance: magic_assembly not ready")
+        return False
+
+    import assembly as _assembly_pkg
+    inst_dir = Path(_assembly_pkg.__file__).parent / "instances"
+    inst_path = inst_dir / f"{variant}.yaml"
+    if not inst_path.exists():
+        available = sorted(p.stem for p in inst_dir.glob("*.yaml"))
+        log_line("WARN ", f"/load_instance: unknown variant {variant!r}. "
+                          f"Available: {', '.join(available) or '(none)'}")
+        return False
+
+    try:
+        from assembly import SequenceRunner
+        runner = SequenceRunner(
+            magic_assembly=STATE.magic_assembly,
+            log_fn=log_line,
+            sequence_path=inst_path,
+        )
+        runner.set_pose_resolver(_ui_pose_resolver)
+        if not runner.load():
+            log_line("WARN ", f"/load_instance: load() failed for {variant!r}")
+            return False
+        STATE.sequence_runner = runner
+        log_line("INFO ", f"/load_instance: loaded {variant!r} "
+                          f"({len(runner._steps)} steps) — run with /run_sequence")
+        return True
+    except Exception as exc:
+        log_line("WARN ", f"/load_instance: error loading {variant!r}: {exc}")
+        return False
+
+
+def _current_stage_id(stage) -> str:
+    """Return a stable identifier for the currently opened stage."""
+    try:
+        root = stage.GetRootLayer()
+        return str(root.realPath or root.identifier or "")
+    except Exception:
+        return ""
+
+
+def _capture_initial_scene_snapshot_once(force: bool = False) -> bool:
+    """Remember each top-level prim's original parent and local transform."""
+    import omni.usd
+    from pxr import Gf, Usd, UsdGeom  # type: ignore
+
+    stage = omni.usd.get_context().get_stage()
+    if stage is None:
+        log_warn("Cannot capture initial scene snapshot: stage unavailable.")
+        return False
+
+    stage_id = _current_stage_id(stage)
+    if (
+        not force
+        and STATE.initial_scene_snapshot
+        and STATE.initial_scene_stage_id == stage_id
+    ):
+        return True
+
+    root = stage.GetDefaultPrim()
+    if root is None or not root.IsValid():
+        log_warn("Cannot capture initial scene snapshot: defaultPrim unavailable.")
+        return False
+
+    snapshot: Dict[str, Dict[str, Any]] = {}
+    tc = Usd.TimeCode.Default()
+    for child in root.GetChildren():
+        if child is None or not child.IsValid():
+            continue
+        name = child.GetName()
+        if not name or name.startswith("socket_") or name.startswith("plug_"):
+            continue
+        try:
+            xf = UsdGeom.Xformable(child)
+            local = xf.GetLocalTransformation(tc)
+            if isinstance(local, tuple):
+                local = local[0]
+            local = Gf.Matrix4d(local)
+        except Exception:
+            local = Gf.Matrix4d(1.0)
+        snapshot[name] = {
+            "path": str(child.GetPath()),
+            "parent_path": str(child.GetParent().GetPath()),
+            "local_matrix": Gf.Matrix4d(local),
+        }
+
+    STATE.initial_scene_snapshot = snapshot
+    STATE.initial_scene_stage_id = stage_id
+    log_line("INFO ", f"Captured initial scene snapshot for {len(snapshot)} top-level prim(s).")
+    return True
+
+
+def _restore_scene_to_initial_snapshot() -> bool:
+    """Restore top-level prims to the parent/local transforms captured at startup."""
+    from pxr import Gf, Sdf  # type: ignore
+
+    if not _capture_initial_scene_snapshot_once():
+        return False
+
+    try:
+        import omni.usd
+
+        stage = omni.usd.get_context().get_stage()
+    except Exception:
+        stage = None
+    if stage is None:
+        log_warn("/reset: stage unavailable.")
+        return False
+
+    try:
+        _ensure_magic_assembly_once()
+    except Exception as exc:
+        log_warn(f"/reset: magic_assembly init failed: {exc}")
+        return False
+
+    ma = STATE.magic_assembly
+    if ma is None:
+        log_warn("/reset: magic_assembly unavailable.")
+        return False
+
+    restored = 0
+    missing: List[str] = []
+    failed: List[str] = []
+
+    for name, spec in STATE.initial_scene_snapshot.items():
+        current_path = ma._find_prim_path(stage, name)
+        if current_path is None:
+            missing.append(name)
+            continue
+
+        current_path = Sdf.Path(str(current_path))
+        target_parent = Sdf.Path(str(spec.get("parent_path") or ""))
+        if not target_parent.IsAbsolutePath():
+            failed.append(name)
+            continue
+
+        if current_path.GetParentPath() != target_parent:
+            moved_path = ma._reparent(stage, current_path, target_parent)
+            if moved_path is None:
+                failed.append(name)
+                continue
+            current_path = moved_path
+
+        prim = stage.GetPrimAtPath(current_path)
+        if prim is None or not prim.IsValid():
+            missing.append(name)
+            continue
+
+        try:
+            ma._set_xform_matrix(prim, Gf.Matrix4d(spec["local_matrix"]))
+            ma._enable_rigid_body(prim)
+            restored += 1
+        except Exception:
+            failed.append(name)
+
+    try:
+        ma._records.clear()
+    except Exception:
+        pass
+
+    if restored:
+        log_line("INFO ", f"/reset: restored {restored} top-level prim(s) to startup pose.")
+    if missing:
+        preview = ", ".join(missing[:8])
+        extra = "" if len(missing) <= 8 else f" (+{len(missing) - 8} more)"
+        log_line("WARN ", f"/reset: missing prims not restored: {preview}{extra}")
+    if failed:
+        preview = ", ".join(failed[:8])
+        extra = "" if len(failed) <= 8 else f" (+{len(failed) - 8} more)"
+        log_line("WARN ", f"/reset: failed to restore: {preview}{extra}")
+    return restored > 0 and not failed
+
+
 def _init_pipeline_once() -> None:
     """Initialize cognition + memory + (optional) robot control once per session."""
     print(f"[PIPELINE] _init_pipeline_once() called", flush=True)
@@ -406,31 +683,7 @@ def _init_pipeline_once() -> None:
         # Safe to create even when no Franka is present; it self-disables and logs.
         STATE.robot_controller = FrankaControlPolicy(logger=lambda m: log_line("INFO ", m))
 
-    if STATE.magic_assembly is None:
-        from .magic_assembly import MagicAssemblyManager
-        STATE.magic_assembly = MagicAssemblyManager(logger=lambda m: log_line("INFO ", m))
-        try:
-            created = STATE.magic_assembly.ensure_extra_hub_bolt_assets()
-            if created.get("bolts", 0) or created.get("sockets", 0):
-                log_line(
-                    "INFO ",
-                    "Extra hub-bolt assets ensured "
-                    f"(bolts={created.get('bolts', 0)}, sockets={created.get('sockets', 0)})",
-                )
-        except Exception as exc:
-            log_line("WARN ", f"Failed to ensure extra hub-bolt assets: {exc}")
-        try:
-            created = STATE.magic_assembly.ensure_case_attachment_assets()
-            if any(created.values()):
-                log_line(
-                    "INFO ",
-                    "Case assets ensured "
-                    f"(bolts={created.get('bolts', 0)}, oils={created.get('oils', 0)}, "
-                    f"top_sockets={created.get('top_sockets', 0)}, "
-                    f"base_alias_sockets={created.get('base_alias_sockets', 0)})",
-                )
-        except Exception as exc:
-            log_line("WARN ", f"Failed to ensure case attachment assets: {exc}")
+    _ensure_magic_assembly_once()
 
     if STATE.state_monitor is None:
         from .config import GT_TRACKED_PRIMS, GT_POSITION_THRESHOLD, GT_ORIENTATION_THRESHOLD, GT_COOLDOWN_SEC
@@ -1554,13 +1807,35 @@ def combine_output_shaft() -> bool:
 def _try_slash_command(text: str) -> bool:
     """Parse and execute a /command entered in the text box.
 
-    Supported commands
-    ------------------
-    /combine("partA", "partB", "plug_name", "socket_name")
-    /separate("part_name")
-    /focus("part_name")
-    /assemblies          — list all active part attachments
-    /flip_casing_base    — rotate Casing_Base 180° so inside faces upward
+    Supported commands  (categorization per docs/commands_description.md)
+    ---------------------------------------------------------------------
+    Basic — Combination:
+      /combine("partA", "partB", "plug_name", "socket_name")
+      /separate("part_name")
+
+    Basic — Movement:
+      /move("part_name", "point")               — teleport part to `point`
+      /move("part_name", "src", "dest")         — teleport from src to dest
+                                                  (src is sanity-checked vs current)
+        Points: named location ("center", "side", "table", "floor", "current", ...),
+                a literal (x, y, z) tuple, or "current".
+      /pick_up("part_name", height_m=0.15)      — translate part +Z
+      /put_down("part_name", drop_m=0.15)       — translate part -Z then auto-seat on table
+      /hover("part_name", "table"|"floor"|z, margin=0.005)
+                                                — drop part along Z so its bottom rests on a surface
+      /flip("part_name", "x"|"y")               — rotate part 180° about world X or Y, then auto-seat
+      /upright("part_name", "x"|"y")            — rotate part 90° about world X (default) or Y, then auto-seat
+      /rotate("part_name", angle_deg=45, "z")   — rotate part by angle about axis
+
+    Basic — Operational:
+      /undo                — reverse the most recent recorded action
+      /reset               — restore all top-level scene parts to startup parent/pose
+      /assemblies          — list all active part attachments
+
+    Shortcuts:
+      /focus("part_name")  — shortcut for /move(part, "current", "center")
+      /unfocus("part_name") — inverse of /focus (restores pre-focus pose)
+      /flip_casing_base    — rotate Casing_Base 180° so inside faces upward
     /combine_casing_top  — combine the top-side hub covers and M6 hub bolts onto Casing_Top
     /combine_casing_base — install the 3 shaft subassemblies and 3 base-side hub covers onto Casing_Base
     /combine_base_shafts — combine the 3 shafts into Casing_Base
@@ -1577,6 +1852,16 @@ def _try_slash_command(text: str) -> bool:
     if not text.startswith("/"):
         return False
 
+    try:
+        _ensure_magic_assembly_once()
+    except Exception as exc:
+        log_line("WARN ", f"/command: magic_assembly init failed: {exc}")
+
+    if re.fullmatch(r"/reset\s*", text, re.IGNORECASE):
+        _reset_episode_runtime("slash_reset")
+        _restore_scene_to_initial_snapshot()
+        return True
+
     # ── /assemblies ──────────────────────────────────────────────────────
     if re.fullmatch(r"/assemblies\s*", text, re.IGNORECASE):
         ma = STATE.magic_assembly
@@ -1592,6 +1877,16 @@ def _try_slash_command(text: str) -> bool:
             log_line("INFO ", "/assemblies: no active attachments")
         return True
 
+    # ── /undo ──────────────────────────────────────────────────────────────
+    if re.fullmatch(r"/undo\s*", text, re.IGNORECASE):
+        ma = STATE.magic_assembly
+        if ma is None:
+            log_line("WARN ", "/undo: magic_assembly not initialised")
+            return True
+        ok = ma.undo()
+        log_line("INFO " if ok else "WARN ", f"/undo: {'OK' if ok else 'nothing to undo or failed'}")
+        return True
+
     # ── /flip_casing_base ──────────────────────────────────────────────────
     if re.fullmatch(r"/flip_casing_base\s*", text, re.IGNORECASE):
         ma = STATE.magic_assembly
@@ -1600,6 +1895,177 @@ def _try_slash_command(text: str) -> bool:
             return True
         ok = ma.flip_casing_base()
         log_line("INFO " if ok else "WARN ", f"/flip_casing_base: {'OK' if ok else 'FAILED'}")
+        return True
+
+    # ── sequence runner commands ───────────────────────────────────────────
+    if re.fullmatch(r"/sequence_status\s*", text, re.IGNORECASE):
+        _ensure_sequence_runner_once()
+        sr = STATE.sequence_runner
+        if sr is None:
+            log_line("WARN ", "/sequence_status: runner not available")
+        else:
+            log_line("INFO ", f"/sequence_status: {sr.format_status()}")
+        return True
+
+    if re.fullmatch(r"/step_next\s*", text, re.IGNORECASE):
+        _ensure_sequence_runner_once()
+        sr = STATE.sequence_runner
+        if sr is None:
+            log_line("WARN ", "/step_next: runner not available")
+        else:
+            result = _run_with_pose_pause(text, lambda: sr.step_next())
+            if sr.pending_pose is not None:
+                pass  # paused for a pose answer; prompt already logged
+            elif result is None:
+                log_line("INFO ", "/step_next: sequence complete (or not started)")
+            else:
+                status = "OK" if result.success else f"FAILED — {result.failure_reason}"
+                log_line("INFO " if result.success else "WARN ",
+                         f"/step_next: [{result.step_id}] {result.human_label} — {status}")
+        return True
+
+    if re.fullmatch(r"/step_prev\s*", text, re.IGNORECASE):
+        _ensure_sequence_runner_once()
+        sr = STATE.sequence_runner
+        if sr is None:
+            log_line("WARN ", "/step_prev: runner not available")
+        else:
+            ok = sr.step_prev()
+            log_line("INFO " if ok else "WARN ", f"/step_prev: {'OK' if ok else 'FAILED'}")
+        return True
+
+    if re.fullmatch(r"/validate_state\s*", text, re.IGNORECASE):
+        _ensure_sequence_runner_once()
+        sr = STATE.sequence_runner
+        if sr is None:
+            log_line("WARN ", "/validate_state: runner not available")
+        else:
+            sr.validate_state()  # logs results internally
+        return True
+
+    if re.fullmatch(r"/reset_sequence\s*", text, re.IGNORECASE):
+        _ensure_sequence_runner_once()
+        sr = STATE.sequence_runner
+        if sr is None:
+            log_line("WARN ", "/reset_sequence: runner not available")
+        else:
+            sr.reset()
+            log_line("INFO ", "/reset_sequence: task state cleared")
+        return True
+
+    m_inst = re.fullmatch(r"/load_instance\s*\(\s*['\"]([\w./-]+)['\"]\s*\)\s*", text, re.IGNORECASE)
+    if m_inst:
+        _load_instance_runner(m_inst.group(1))
+        return True
+
+    m_run = re.fullmatch(r"/run_sequence(?:\s*\(\s*(['\"]?)(\w*)\1\s*\))?\s*", text, re.IGNORECASE)
+    if m_run:
+        _ensure_sequence_runner_once()
+        sr = STATE.sequence_runner
+        if sr is None:
+            log_line("WARN ", "/run_sequence: runner not available")
+        else:
+            n = _run_with_pose_pause(text, lambda: sr.run_sequence(delay_s=0.3))
+            if sr.pending_pose is None:
+                log_line("INFO ", f"/run_sequence: {n} steps completed")
+        return True
+
+    m_step = re.fullmatch(r"/run_step\s*\(\s*['\"]([^'\"]+)['\"]\s*\)\s*", text, re.IGNORECASE)
+    if m_step:
+        _ensure_sequence_runner_once()
+        sr = STATE.sequence_runner
+        step_id = m_step.group(1)
+        if sr is None:
+            log_line("WARN ", f"/run_step: runner not available")
+        else:
+            result = _run_with_pose_pause(text, lambda: sr.jump_to_step(step_id))
+            if sr.pending_pose is not None:
+                pass  # paused for a pose answer; prompt already logged
+            elif result is None:
+                log_line("WARN ", f"/run_step({step_id!r}): step not found")
+            else:
+                status = "OK" if result.success else f"FAILED — {result.failure_reason}"
+                log_line("INFO " if result.success else "WARN ",
+                         f"/run_step: [{result.step_id}] {result.human_label} — {status}")
+        return True
+
+    # ── DAG queries: ready steps, streams, groups ──────────────────────────
+    m_ready = re.fullmatch(
+        r"/ready(?:\s*\(\s*(?:stream\s*=\s*)?['\"]?(\w*)['\"]?\s*\))?\s*",
+        text, re.IGNORECASE)
+    if m_ready:
+        _ensure_sequence_runner_once()
+        sr = STATE.sequence_runner
+        if sr is None:
+            log_line("WARN ", "/ready: runner not available")
+        else:
+            stream_filter = m_ready.group(1) or None
+            ready = sr.get_ready_steps(stream=stream_filter)
+            suffix = f" (stream={stream_filter!r})" if stream_filter else ""
+            if not ready:
+                log_line("INFO ", f"/ready{suffix}: no steps ready")
+            else:
+                log_line("INFO ", f"/ready{suffix}: {len(ready)} step(s) ready")
+                for sid in ready[:20]:
+                    s_stream = sr.step_stream(sid) or "-"
+                    s_group = sr.step_group(sid) or "-"
+                    log_line("INFO ", f"  [{sid}] stream={s_stream} group={s_group}")
+                if len(ready) > 20:
+                    log_line("INFO ", f"  ...and {len(ready) - 20} more")
+        return True
+
+    if re.fullmatch(r"/streams\s*", text, re.IGNORECASE):
+        _ensure_sequence_runner_once()
+        sr = STATE.sequence_runner
+        if sr is None:
+            log_line("WARN ", "/streams: runner not available")
+        else:
+            for stream_id in sr._streams:
+                p = sr.stream_progress(stream_id)
+                par = ", ".join(p.get("can_parallel_with", [])) or "(none)"
+                log_line("INFO ",
+                         f"  [{stream_id}] {p['completed']}/{p['total']} done, "
+                         f"{p['ready']} ready  ||  parallel-with: {par}")
+        return True
+
+    if re.fullmatch(r"/groups\s*", text, re.IGNORECASE):
+        _ensure_sequence_runner_once()
+        sr = STATE.sequence_runner
+        if sr is None:
+            log_line("WARN ", "/groups: runner not available")
+        else:
+            for gid, spec in sr._groups.items():
+                log_line("INFO ", f"  [{gid}] stream={spec.get('stream', '-')}  "
+                                  f"members={len(spec.get('members', []))}  "
+                                  f"-- {spec.get('description', '')}")
+        return True
+
+    m_runstream = re.fullmatch(r"/run_stream\s*\(\s*['\"]([^'\"]+)['\"]\s*\)\s*", text, re.IGNORECASE)
+    if m_runstream:
+        _ensure_sequence_runner_once()
+        sr = STATE.sequence_runner
+        sid = m_runstream.group(1)
+        if sr is None:
+            log_line("WARN ", "/run_stream: runner not available")
+        else:
+            results = _run_with_pose_pause(text, lambda: sr.run_stream(sid, delay_s=0.2))
+            if sr.pending_pose is None:
+                ok = sum(1 for r in results if r.success)
+                log_line("INFO ", f"/run_stream({sid!r}): {ok}/{len(results)} succeeded")
+        return True
+
+    m_rungroup = re.fullmatch(r"/run_group\s*\(\s*['\"]([^'\"]+)['\"]\s*\)\s*", text, re.IGNORECASE)
+    if m_rungroup:
+        _ensure_sequence_runner_once()
+        sr = STATE.sequence_runner
+        gid = m_rungroup.group(1)
+        if sr is None:
+            log_line("WARN ", "/run_group: runner not available")
+        else:
+            results = _run_with_pose_pause(text, lambda: sr.run_group(gid, delay_s=0.1))
+            if sr.pending_pose is None:
+                ok = sum(1 for r in results if r.success)
+                log_line("INFO ", f"/run_group({gid!r}): {ok}/{len(results)} succeeded")
         return True
 
     # ── batch combine shortcuts ────────────────────────────────────────────
@@ -1637,9 +2103,15 @@ def _try_slash_command(text: str) -> bool:
         log_line(
             "WARN ",
             f"Unknown /command: {text!r}  "
-            f"(use /combine, /separate, /focus, /assemblies, /combine_casing_top, "
-            f"/combine_casing_base, /combine_base_shafts, /combine_bolt_hub, "
-            f"/combine_casing_bolt, /combine_accessories, /combine_output_shaft)",
+            f"(sequence: /run_sequence, /step_next, /step_prev, /run_step('id'), "
+            f"/sequence_status, /validate_state, /reset_sequence, "
+            f"/load_instance('variant')  |  "
+            f"DAG: /ready, /ready('stream_id'), /streams, /groups, "
+            f"/run_stream('id'), /run_group('id')  |  "
+            f"assembly: /combine, /separate, /focus, /reset, /assemblies, "
+            f"/combine_casing_top, /combine_casing_base, /combine_base_shafts, "
+            f"/combine_bolt_hub, /combine_casing_bolt, /combine_accessories, "
+            f"/combine_output_shaft)",
         )
         return True
 
@@ -1729,11 +2201,138 @@ def _try_slash_command(text: str) -> bool:
         ))
         log_line("INFO ", f"/focus queued: {part!r}")
 
+    elif cmd_name == "unfocus":
+        if len(args) < 1:
+            log_line("WARN ", "/unfocus requires 1 argument: part_name")
+            return True
+        part = str(args[0])
+        ok = ma.unfocus(part)
+        log_line("INFO " if ok else "WARN ", f"/unfocus({part!r}) {'OK' if ok else 'FAILED'}")
+        return True
+
+    elif cmd_name == "move":
+        if len(args) < 2:
+            log_line(
+                "WARN ",
+                "/move requires part_name and at least 1 point. "
+                "Usage: /move(\"part\", \"dest\") or /move(\"part\", \"src\", \"dest\"). "
+                "Points: named location, (x,y,z) tuple, or \"current\"."
+            )
+            return True
+        part = str(args[0])
+        if len(args) == 2:
+            point_1, point_2 = args[1], None
+        else:
+            point_1, point_2 = args[1], args[2]
+        ok = ma.move(part, point_1, point_2)
+        log_line(
+            "INFO " if ok else "WARN ",
+            f"/move({part!r}, {point_1!r}"
+            + (f", {point_2!r}" if point_2 is not None else "")
+            + f") {'OK' if ok else 'FAILED'}",
+        )
+        return True
+
+    elif cmd_name == "upright":
+        if len(args) < 1:
+            log_line("WARN ", "/upright requires 1 argument: part_name (optional 2nd: axis 'x' or 'y')")
+            return True
+        part = str(args[0])
+        axis = str(args[1]) if len(args) >= 2 else "x"
+        # Auto-seat onto the table afterwards: standing a flat part changes its
+        # lowest point, so re-settle it on the surface (folded into one undo).
+        ok = ma.upright(part, axis=axis, seat=True)
+        log_line("INFO " if ok else "WARN ",
+                 f"/upright({part!r}, axis={axis!r}, seat) {'OK' if ok else 'FAILED'}")
+        return True
+
+    elif cmd_name == "flip":
+        if len(args) < 1:
+            log_line("WARN ", "/flip requires 1 argument: part_name (optional 2nd: axis 'x' or 'y')")
+            return True
+        part = str(args[0])
+        axis = str(args[1]) if len(args) >= 2 else "x"
+        # Auto-seat onto the table afterwards: flipping changes which face is
+        # down, so re-settle it on the surface (folded into one undo).
+        ok = ma.flip(part, axis=axis, seat=True)
+        log_line("INFO " if ok else "WARN ",
+                 f"/flip({part!r}, axis={axis!r}, seat) {'OK' if ok else 'FAILED'}")
+        return True
+
+    elif cmd_name == "rotate":
+        if len(args) < 1:
+            log_line("WARN ",
+                     "/rotate requires 1 argument: part_name (optional: angle_deg=45, axis='z')")
+            return True
+        part = str(args[0])
+        try:
+            angle = float(args[1]) if len(args) >= 2 else 45.0
+        except (TypeError, ValueError):
+            log_line("WARN ", f"/rotate: angle must be a number, got {args[1]!r}")
+            return True
+        axis = str(args[2]) if len(args) >= 3 else "z"
+        ok = ma.rotate(part, angle_deg=angle, axis=axis)
+        log_line("INFO " if ok else "WARN ",
+                 f"/rotate({part!r}, {angle}°, axis={axis!r}) {'OK' if ok else 'FAILED'}")
+        return True
+
+    elif cmd_name == "pick_up":
+        if len(args) < 1:
+            log_line("WARN ", "/pick_up requires 1 argument: part_name (optional 2nd: height_m=0.15)")
+            return True
+        part = str(args[0])
+        try:
+            height = float(args[1]) if len(args) >= 2 else 0.15
+        except (TypeError, ValueError):
+            log_line("WARN ", f"/pick_up: height must be a number, got {args[1]!r}")
+            return True
+        ok = ma.pick_up(part, height=height)
+        log_line("INFO " if ok else "WARN ",
+                 f"/pick_up({part!r}, +{height}m) {'OK' if ok else 'FAILED'}")
+        return True
+
+    elif cmd_name == "put_down":
+        if len(args) < 1:
+            log_line("WARN ", "/put_down requires 1 argument: part_name (optional 2nd: drop_m=0.15)")
+            return True
+        part = str(args[0])
+        try:
+            drop = float(args[1]) if len(args) >= 2 else 0.15
+        except (TypeError, ValueError):
+            log_line("WARN ", f"/put_down: drop must be a number, got {args[1]!r}")
+            return True
+        # Auto-seat onto the table afterwards so the part rests exactly on the
+        # surface regardless of drop distance (folded into one undo).
+        ok = ma.put_down(part, drop=drop, seat=True)
+        log_line("INFO " if ok else "WARN ",
+                 f"/put_down({part!r}, -{drop}m, seat) {'OK' if ok else 'FAILED'}")
+        return True
+
+    elif cmd_name == "hover":
+        if len(args) < 1:
+            log_line("WARN ", "/hover requires 1 argument: part_name "
+                              "(optional 2nd: surface='table'|'floor'|z, 3rd: margin=0.005)")
+            return True
+        part = str(args[0])
+        surface = args[1] if len(args) >= 2 else "table"
+        try:
+            margin = float(args[2]) if len(args) >= 3 else 0.005
+        except (TypeError, ValueError):
+            log_line("WARN ", f"/hover: margin must be a number, got {args[2]!r}")
+            return True
+        ok = ma.hover(part, surface=surface, margin=margin)
+        log_line("INFO " if ok else "WARN ",
+                 f"/hover({part!r}, surface={surface!r}, margin={margin}m) {'OK' if ok else 'FAILED'}")
+        return True
+
     else:
         log_line(
             "WARN ",
             f"Unknown /command: /{cmd_name}  "
-            f"(use /combine, /separate, /focus, /assemblies, /combine_casing_top, "
+            f"(combination: /combine, /separate  |  "
+            f"movement: /move, /pick_up, /put_down, /hover, /flip, /upright, /rotate  |  "
+            f"operational: /undo, /reset, /assemblies  |  "
+            f"shortcuts: /focus, /unfocus, /flip_casing_base, /combine_casing_top, "
             f"/combine_casing_base, /combine_base_shafts, /combine_bolt_hub, "
             f"/combine_casing_bolt, /combine_accessories)",
         )
@@ -1754,6 +2353,30 @@ def on_send() -> None:
     """Queue a user message for the cognition worker (non-blocking)."""
     user_text = (STATE.input_model.as_string or "").strip() if STATE.input_model else ""
     if not user_text:
+        return
+
+    # A paused check_pose takes priority: interpret this input as the Y/N answer
+    # and resume the command that paused (see _ui_pose_resolver). Anything that
+    # isn't a yes/no answer is rejected so the operator must resolve the pose
+    # before issuing other commands.
+    sr = STATE.sequence_runner
+    if sr is not None and sr.pending_pose is not None:
+        pending = sr.pending_pose
+        answer = _parse_pose_answer(user_text)
+        if STATE.input_model:
+            STATE.input_model.set_value("")
+        if answer is None:
+            log_line("WARN ", "Pose check pending — please reply Y (yes) or N (no).")
+            return
+        log_line("YOU  ", user_text)
+        sr.answer_pose(answer)
+        log_line("INFO ", f"[POSE] '{pending.get('child')}' -> "
+                          + ("correct" if answer
+                             else "INCORRECT — conditional flip will fire"))
+        resume_cmd = STATE.pose_resume_cmd
+        STATE.pose_resume_cmd = None
+        if resume_cmd:
+            _try_slash_command(resume_cmd)
         return
 
     # Handle /slash-commands locally — never forward them to the VLM.
@@ -1839,6 +2462,53 @@ def on_send() -> None:
         return
 
     loop.create_task(_send_manual_with_frames(frames))
+
+
+def on_step_next() -> None:
+    """Shortcut button: send the /step_next slash command (same path as typing it)."""
+    cmd = "/step_next"
+    log_line("YOU  ", cmd)
+    _try_slash_command(cmd)
+
+
+def _bind_input_enter_to_send(field) -> None:
+    """Best-effort: map Enter in the command box to the same path as the Send button."""
+
+    def _submit(*_args, **_kwargs) -> None:
+        try:
+            on_send()
+        except Exception as exc:
+            log_warn(f"Enter-to-send failed: {exc}")
+
+    owners = [STATE.input_model, getattr(field, "model", None), field]
+    method_names = (
+        "add_end_edit_fn",
+        "set_end_edit_fn",
+        "subscribe_end_edit_fn",
+        "set_on_end_edit_fn",
+        "add_submit_fn",
+        "set_submit_fn",
+        "add_accepted_fn",
+        "set_accepted_fn",
+    )
+
+    for owner in owners:
+        if owner is None:
+            continue
+        for method_name in method_names:
+            fn = getattr(owner, method_name, None)
+            if not callable(fn):
+                continue
+            try:
+                hook = fn(_submit)
+                if hook is not None:
+                    STATE._kit_subs.append(hook)
+                setattr(STATE, "_input_enter_binding", f"{owner.__class__.__name__}.{method_name}")
+                return
+            except Exception:
+                continue
+
+    log_warn("Enter-to-send shortcut unavailable in this Isaac build; use the Send button.")
 
 
 async def _capture_loop() -> None:
@@ -2744,10 +3414,13 @@ def build_ui() -> None:
 
                     ui.Label("Type anything:")
                     STATE.input_model = ui.SimpleStringModel("")
-                    ui.StringField(STATE.input_model, height=30)
+                    input_field = ui.StringField(STATE.input_model, height=30)
+                    _bind_input_enter_to_send(input_field)
 
                     with ui.HStack(height=30, spacing=8):
                         ui.Button("Send", clicked_fn=on_send, height=30)
+                        ui.Button("Next step", clicked_fn=on_step_next, height=30,
+                                  tooltip="Shortcut for /step_next — execute the next ready assembly step")
                         ui.Spacer()
 
 
@@ -2949,6 +3622,7 @@ def run() -> None:
     # Kick startup sequence (do not await; keep UI responsive).
     loop.create_task(_startup_sequence())
     build_ui()
+    _capture_initial_scene_snapshot_once()
     render_log()
 
     log_info("UI ready. Click 'Init Camera' once, then click PLAY to start the sim loop.")

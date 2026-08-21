@@ -1,15 +1,36 @@
 #!/usr/bin/env python3
 """Scatter gearbox parts across the table and floor so they don't overlap.
 
-Modifies ONLY the xformOp:translate attribute of each part prim in the scene file.
-Keeps rotation, scale, and pivot ops unchanged.
+Run via the repo wrapper (handles pxr / LD_LIBRARY_PATH / launcher discovery):
 
-Table surface is at approximately Z ≈ 2.35 (based on Orange_01 at Z=2.39).
-Floor is at approximately Z ≈ 0.0 (based on pail/bucket positions).
+    docker compose exec hac tools/run_tool.sh tools/scatter_parts.py --dry-run
+    docker compose exec hac tools/run_tool.sh tools/scatter_parts.py
+    docker compose exec hac tools/run_tool.sh tools/scatter_parts.py --verify
+
+The wrapper is required because `pxr` ships as the `omni.usd.libs` Omniverse
+extension; it is only on PYTHONPATH after a Kit app starts. This script is a
+pure offline USD edit (no Kit) so it needs `tools/run_tool.sh` to set
+PYTHONPATH and LD_LIBRARY_PATH before launching Isaac Sim's Python.
+
+Per-part scatter spec lives in assembly/scatter_layout.yaml (override with
+--layout). Each entry under `parts:` is one of:
+  - bbox-contact (preferred):
+        {xy: [x, y], surface: table|floor, rot: [rx, ry, rz], z: <override>}
+        Rotation (if any) is applied first, then Z is derived so the world-AABB
+        bottom rests on <surface>_surface_z + spawn_margin, independent of the
+        part's geometry pivot. This is the Phase 0 hover fix / diversity path.
+  - legacy absolute:
+        {pos: [x, y, z]}
+        Sets xformOp:translate directly; rotation preserved.
+
+Surface constants (table_surface_z, floor_surface_z, spawn_margin, and the
+legacy table_z/floor_z) also live in that YAML under `surfaces:`.
 """
 
 import os
 import sys
+
+import yaml
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _REPO_ROOT)
@@ -19,56 +40,62 @@ ensure_pxr_paths()
 
 from pxr import Usd, UsdGeom, Gf  # noqa: E402
 
-# ---------------------------------------------------------------------------
-# Hardcoded layout — parts scattered across the table with generous spacing.
-#
-# Coordinate system (Z-up):
-#   Table surface ≈ Z = 2.40  (Orange_01 sits at 2.39)
-#   Floor         ≈ Z = 0.02  (pails/buckets sit at 0.02–0.04)
-#   Table center  ≈ (X=0, Y=0)
-#   Table extent  ≈ X: [-0.50, 0.50],  Y: [-0.70, 0.70]
-#
-# Layout: 4-column grid on the table, well-spaced.
-# Large parts at the edges, small parts in the middle.
-# ---------------------------------------------------------------------------
+# Default scatter-layout spec (positions + surface constants live here, not in code).
+DEFAULT_LAYOUT_PATH = os.path.join(_REPO_ROOT, "assembly", "scatter_layout_007050.yaml")
 
-TABLE_Z = 2.40   # just above the table surface
-FLOOR_Z = 0.02   # just above the floor
-
-# Room extents (approx): X: [-2.5, 2.5],  Y: [-2.5, 2.5]
-# Table center ≈ (0, 0), table extent ≈ X: [-0.50, 0.50], Y: [-0.70, 0.70]
-# Parts at scale 0.002 are smaller in scene, but we keep generous spacing.
-
-PART_POSITIONS = {
-    # --- Large casings: far apart on floor ---
-    "Casing_Base":        (-1.80,  1.50, FLOOR_Z),   # floor, back-left corner
-    "Casing_Top":         ( 1.80,  1.50, FLOOR_Z),   # floor, back-right corner
-
-    # --- Gears: on table, well separated ---
-    "Output_Gear":        (-0.40,  0.50, TABLE_Z),   # table back-left
-    "Transfer_Gear":      ( 0.40, -0.50, TABLE_Z),   # table front-right
-
-    # --- Hub covers: mix of table and floor ---
-    "Hub_Cover_Input":    (-1.80, -1.50, FLOOR_Z),   # floor, front-left corner
-    "Hub_Cover_Output":   ( 1.80, -1.50, FLOOR_Z),   # floor, front-right corner
-    "Hub_Cover_Small":    (-1.00, -1.50, FLOOR_Z),   # floor, front-center-left
-
-    # --- Shafts: floor, spread along walls ---
-    "Output_Shaft":       ( 1.80,  0.00, FLOOR_Z),   # floor, right wall
-    "Input_Shaft":        (-1.80,  0.00, FLOOR_Z),   # floor, left wall
-    "Transfer_Shaft":     ( 0.00,  1.80, FLOOR_Z),   # floor, back wall
-
-    # --- Small parts: scattered on table and nearby floor ---
-    "M10_Casing_Bolt":    (-0.40, -0.50, TABLE_Z),   # table front-left
-    "M10_Casing_Bolt_01": ( 0.40,  0.50, TABLE_Z),   # table back-right
-    "M10_Casing_Nut":     ( 0.00, -1.80, FLOOR_Z),   # floor, front wall
-    "M6_Hub_Bolt":        (-1.00,  0.80, FLOOR_Z),   # floor, mid-left
-    "Breather_Plug":      ( 1.00, -0.80, FLOOR_Z),   # floor, mid-right
-    "Oil_Level_Indicator":( 0.00,  0.00, TABLE_Z),    # table center
-}
+SPAWN_MARGIN = 0.005  # default clearance above the surface; overridden by the layout
 
 
-def scatter(scene_path: str, dry_run: bool = False) -> int:
+def load_layout(path: str):
+    """Load the scatter-layout YAML. Returns (surfaces: dict, parts: dict).
+
+    surfaces holds table_surface_z / floor_surface_z / spawn_margin (and legacy
+    table_z / floor_z). parts maps part name -> entry (bbox-contact or pos form).
+    """
+    with open(path) as fh:
+        data = yaml.safe_load(fh) or {}
+    surfaces = data.get("surfaces", {}) or {}
+    parts = data.get("parts", {}) or {}
+    if not parts:
+        raise ValueError(f"scatter layout {path!r} has no 'parts:' entries")
+    return surfaces, parts
+
+
+def _is_dict_spec(entry) -> bool:
+    """A bbox-contact / explicit entry (has xy/surface/rot/z), not a legacy pos."""
+    return isinstance(entry, dict) and "pos" not in entry
+
+
+def _find_op(xf, op_type):
+    for op in xf.GetOrderedXformOps():
+        if op.GetOpType() == op_type and "pivot" not in op.GetOpName():
+            return op
+    return None
+
+
+def _surface_z(surface_name: str, surfaces: dict) -> float:
+    if surface_name == "table":
+        return float(surfaces.get("table_surface_z", -0.1))
+    return float(surfaces.get("floor_surface_z", 0.0))
+
+
+def _world_bbox_min_z(prim, tc) -> float:
+    cache = UsdGeom.BBoxCache(tc, includedPurposes=[UsdGeom.Tokens.default_])
+    bbox = cache.ComputeWorldBound(prim)
+    aabb = bbox.ComputeAlignedRange()
+    return float(aabb.GetMin()[2])
+
+
+def _set_rotate_xyz(xf, rot_xyz):
+    op = _find_op(xf, UsdGeom.XformOp.TypeRotateXYZ)
+    if op is None:
+        op = xf.AddRotateXYZOp(UsdGeom.XformOp.PrecisionFloat)
+    op.Set(Gf.Vec3f(*rot_xyz))
+    return op
+
+
+def scatter(scene_path: str, surfaces: dict, parts: dict, dry_run: bool = False) -> int:
+    spawn_margin = float(surfaces.get("spawn_margin", SPAWN_MARGIN))
     stage = Usd.Stage.Open(scene_path)
     dp = stage.GetDefaultPrim()
     if dp is None or not dp.IsValid():
@@ -80,35 +107,54 @@ def scatter(scene_path: str, dry_run: bool = False) -> int:
 
     for child in dp.GetChildren():
         name = child.GetName()
-        if name not in PART_POSITIONS:
+        if name not in parts:
             continue
-        new_pos = PART_POSITIONS[name]
+        entry = parts[name]
 
         xf = UsdGeom.Xformable(child)
-        ops = xf.GetOrderedXformOps()
-        if not ops:
-            print(f"  [SKIP] {name}: no xformOps")
-            continue
-
-        # Find the translate op (first op should be translate)
-        translate_op = None
-        for op in ops:
-            if op.GetOpName() == "xformOp:translate" and "pivot" not in op.GetOpName():
-                translate_op = op
-                break
-
+        translate_op = _find_op(xf, UsdGeom.XformOp.TypeTranslate)
         if translate_op is None:
             print(f"  [SKIP] {name}: no translate op found")
             continue
 
         old_pos = translate_op.Get(tc)
+        rot_msg = ""
+
+        if _is_dict_spec(entry):
+            x, y = entry["xy"]
+            surface = entry.get("surface", "floor")
+            rot = entry.get("rot")
+            z_override = entry.get("z")
+
+            # 1) Apply rotation first so bbox reflects new orientation.
+            if rot is not None:
+                rot_msg = f", rot -> {tuple(rot)}"
+                if not dry_run:
+                    _set_rotate_xyz(xf, rot)
+
+            # 2) Derive Z via bbox contact unless an explicit override is given.
+            if z_override is not None:
+                new_z = float(z_override)
+            else:
+                target_bottom = _surface_z(surface, surfaces) + spawn_margin
+                if dry_run:
+                    new_z = target_bottom
+                else:
+                    translate_op.Set(Gf.Vec3d(x, y, 0.0))
+                    bbox_min_z = _world_bbox_min_z(child, tc)
+                    new_z = target_bottom - bbox_min_z
+
+            new_pos = (x, y, new_z)
+        else:
+            new_pos = entry["pos"]  # legacy absolute — translate-only, rotation preserved
+
+        old_fmt = f"({old_pos[0]:.3f}, {old_pos[1]:.3f}, {old_pos[2]:.3f})"
+        new_fmt = f"({new_pos[0]:.3f}, {new_pos[1]:.3f}, {new_pos[2]:.3f})"
         if dry_run:
-            print(f"  [DRY] {name}: ({old_pos[0]:.3f}, {old_pos[1]:.3f}, {old_pos[2]:.3f}) -> "
-                  f"({new_pos[0]:.3f}, {new_pos[1]:.3f}, {new_pos[2]:.3f})")
+            print(f"  [DRY] {name}: {old_fmt} -> {new_fmt}{rot_msg}")
         else:
             translate_op.Set(Gf.Vec3d(*new_pos))
-            print(f"  [SET] {name}: ({old_pos[0]:.3f}, {old_pos[1]:.3f}, {old_pos[2]:.3f}) -> "
-                  f"({new_pos[0]:.3f}, {new_pos[1]:.3f}, {new_pos[2]:.3f})")
+            print(f"  [SET] {name}: {old_fmt} -> {new_fmt}{rot_msg}")
         n_moved += 1
 
     if not dry_run and n_moved > 0:
@@ -118,27 +164,37 @@ def scatter(scene_path: str, dry_run: bool = False) -> int:
     return 0
 
 
-def verify(scene_path: str) -> int:
-    """Verify no two parts overlap (center-to-center distance check)."""
+def verify(scene_path: str, surfaces: dict, parts: dict) -> int:
+    """Verify pairwise spacing and per-part placement.
+
+    For pos-form entries, the translate must match exactly (legacy strict check).
+    For bbox-contact entries, XY must match exactly; Z is checked via bbox-contact —
+    the world-AABB bottom must be within HOVER_TOL of (surface + spawn_margin).
+    """
+    spawn_margin = float(surfaces.get("spawn_margin", SPAWN_MARGIN))
     stage = Usd.Stage.Open(scene_path)
     dp = stage.GetDefaultPrim()
     tc = Usd.TimeCode.Default()
 
     positions = {}
+    bbox_min_z = {}
     for child in dp.GetChildren():
         name = child.GetName()
-        if name not in PART_POSITIONS:
+        if name not in parts:
             continue
         xf = UsdGeom.Xformable(child)
-        ops = xf.GetOrderedXformOps()
-        for op in ops:
-            if op.GetOpName() == "xformOp:translate" and "pivot" not in op.GetOpName():
-                pos = op.Get(tc)
-                positions[name] = (pos[0], pos[1], pos[2])
-                break
+        translate_op = _find_op(xf, UsdGeom.XformOp.TypeTranslate)
+        if translate_op is None:
+            continue
+        pos = translate_op.Get(tc)
+        positions[name] = (float(pos[0]), float(pos[1]), float(pos[2]))
+        try:
+            bbox_min_z[name] = _world_bbox_min_z(child, tc)
+        except Exception:
+            pass
 
-    # Check pairwise distances
-    MIN_DISTANCE = 0.50  # 50cm minimum between part centers
+    # Pairwise distance check
+    MIN_DISTANCE = 0.03
     names = list(positions.keys())
     n_pass = 0
     n_fail = 0
@@ -146,32 +202,55 @@ def verify(scene_path: str) -> int:
         for j in range(i + 1, len(names)):
             a, b = names[i], names[j]
             pa, pb = positions[a], positions[b]
-            dx = pa[0] - pb[0]
-            dy = pa[1] - pb[1]
-            dz = pa[2] - pb[2]
-            dist = (dx**2 + dy**2 + dz**2) ** 0.5
+            dx, dy, dz = pa[0] - pb[0], pa[1] - pb[1], pa[2] - pb[2]
+            dist = (dx * dx + dy * dy + dz * dz) ** 0.5
             if dist < MIN_DISTANCE:
                 print(f"  [FAIL] {a} <-> {b}: distance = {dist:.3f}m (min {MIN_DISTANCE}m)")
                 n_fail += 1
             else:
                 n_pass += 1
 
-    # Check positions match expected values
+    # Per-part placement check
+    HOVER_TOL = 0.02  # 2 cm — bbox bottom must be within this of (surface + margin)
     n_pos_pass = 0
     n_pos_fail = 0
-    for name, expected in PART_POSITIONS.items():
+    for name, entry in parts.items():
         if name not in positions:
             print(f"  [FAIL] {name}: not found in scene")
             n_pos_fail += 1
             continue
         actual = positions[name]
-        if (abs(actual[0] - expected[0]) > 0.001 or
-            abs(actual[1] - expected[1]) > 0.001 or
-            abs(actual[2] - expected[2]) > 0.001):
-            print(f"  [FAIL] {name}: position mismatch actual={actual} expected={expected}")
-            n_pos_fail += 1
-        else:
+
+        if _is_dict_spec(entry):
+            ex, ey = entry["xy"]
+            if abs(actual[0] - ex) > 0.001 or abs(actual[1] - ey) > 0.001:
+                print(f"  [FAIL] {name}: XY mismatch actual=({actual[0]:.3f},{actual[1]:.3f}) "
+                      f"expected=({ex:.3f},{ey:.3f})")
+                n_pos_fail += 1
+                continue
+            if "z" in entry:
+                if abs(actual[2] - float(entry["z"])) > 0.001:
+                    print(f"  [FAIL] {name}: Z override mismatch actual={actual[2]:.3f} "
+                          f"expected={entry['z']:.3f}")
+                    n_pos_fail += 1
+                    continue
+            elif name in bbox_min_z:
+                target_bottom = _surface_z(entry.get("surface", "floor"), surfaces) + spawn_margin
+                if abs(bbox_min_z[name] - target_bottom) > HOVER_TOL:
+                    print(f"  [FAIL] {name}: hovering — bbox bottom Z={bbox_min_z[name]:.3f}, "
+                          f"expected ≈ {target_bottom:.3f}")
+                    n_pos_fail += 1
+                    continue
             n_pos_pass += 1
+        else:
+            expected = entry["pos"]
+            if (abs(actual[0] - expected[0]) > 0.001 or
+                abs(actual[1] - expected[1]) > 0.001 or
+                abs(actual[2] - expected[2]) > 0.001):
+                print(f"  [FAIL] {name}: position mismatch actual={actual} expected={expected}")
+                n_pos_fail += 1
+            else:
+                n_pos_pass += 1
 
     total_checks = n_pass + n_fail + n_pos_pass + n_pos_fail
     total_pass = n_pass + n_pos_pass
@@ -191,18 +270,23 @@ if __name__ == "__main__":
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--verify", action="store_true", help="Only verify, don't modify.")
     parser.add_argument("--scene", default=os.path.join(_REPO_ROOT, "assets", "simple_room_scene.usd"))
+    parser.add_argument("--layout", default=DEFAULT_LAYOUT_PATH,
+                        help="Scatter-layout YAML (positions + surface constants).")
     args = parser.parse_args()
+
+    surfaces, parts = load_layout(args.layout)
 
     print(f"\n{'='*60}")
     print(f"  Scatter Parts — spread gearbox parts across the table")
-    print(f"  Scene: {os.path.basename(args.scene)}")
+    print(f"  Scene:  {os.path.basename(args.scene)}")
+    print(f"  Layout: {os.path.basename(args.layout)} ({len(parts)} parts)")
     print(f"{'='*60}\n")
 
     if args.verify:
-        sys.exit(verify(args.scene))
+        sys.exit(verify(args.scene, surfaces, parts))
     else:
-        rc = scatter(args.scene, dry_run=args.dry_run)
+        rc = scatter(args.scene, surfaces, parts, dry_run=args.dry_run)
         if rc == 0 and not args.dry_run:
             print("\nRunning verification...\n")
-            sys.exit(verify(args.scene))
+            sys.exit(verify(args.scene, surfaces, parts))
         sys.exit(rc)
