@@ -12,6 +12,7 @@ import json
 import os
 import sys
 import types
+from importlib.machinery import ModuleSpec
 from pathlib import Path
 
 
@@ -31,6 +32,14 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--num-chunks", type=int, default=1)
     parser.add_argument("--video-steps", type=int, default=5)
     parser.add_argument("--action-steps", type=int, default=10)
+    parser.add_argument("--height", type=int, default=224)
+    parser.add_argument("--width", type=int, default=320)
+    parser.add_argument(
+        "--text-max-length",
+        type=int,
+        default=512,
+        help="T5 prompt length; 512 is the official setting, shorter values are interface smoke only.",
+    )
     parser.add_argument("--gpu", type=int, default=0)
     return parser.parse_args()
 
@@ -43,6 +52,10 @@ def _validate(args: argparse.Namespace) -> None:
         raise FileNotFoundError(f"input directory missing required images: {missing}")
     if args.num_chunks < 1 or args.video_steps < 1 or args.action_steps < 1:
         raise ValueError("num-chunks and inference steps must be positive")
+    if args.text_max_length < 1:
+        raise ValueError("text-max-length must be positive")
+    if args.height < 16 or args.width < 16 or args.height % 16 or args.width % 16:
+        raise ValueError("height and width must be positive multiples of 16")
 
 
 def main() -> int:
@@ -58,6 +71,9 @@ def main() -> int:
         "num_chunks": args.num_chunks,
         "video_inference_steps": args.video_steps,
         "action_inference_steps": args.action_steps,
+        "text_max_length": args.text_max_length,
+        "height": args.height,
+        "width": args.width,
         "enable_offload": True,
         "native_action_layout": "Franka config: selected Cartesian EEF/gripper channels in 30-dim layout",
         "note": "Base-model interface smoke only; no custom task adaptation or completion score.",
@@ -71,6 +87,9 @@ def main() -> int:
         import flash_attn  # type: ignore  # noqa: F401
     except ModuleNotFoundError:
         stub = types.ModuleType("flash_attn")
+        # diffusers probes optional dependencies with importlib.util.find_spec;
+        # a hand-built module therefore needs a non-None module spec.
+        stub.__spec__ = ModuleSpec("flash_attn", loader=None)
         def _unused_flash_attn(*_args, **_kwargs):
             raise RuntimeError("flash-attn stub called; inference must use attn_mode='torch'")
         stub.flash_attn_func = _unused_flash_attn
@@ -79,10 +98,25 @@ def main() -> int:
     # The official server requires torch.distributed even for one process.  This
     # entry point is therefore invoked under torch.distributed.run by the shell
     # launcher; importing the upstream config here lets us avoid editing it.
-    from wan_va.configs import VA_CONFIGS  # type: ignore
-    from wan_va.wan_va_server import init_logger, run  # type: ignore
+    # `wan_va_server.py` uses a legacy top-level `configs` import.  Importing
+    # `wan_va.configs` separately can therefore create a second module object;
+    # mutate the dictionary owned by the server module itself.
+    import wan_va.wan_va_server as server  # type: ignore
 
-    config = VA_CONFIGS["franka_i2va"]
+    if args.text_max_length != 512:
+        official_encode_prompt = server.VA_Server.encode_prompt
+
+        def encode_prompt_for_smoke(self, *prompt_args, **prompt_kwargs):
+            prompt_kwargs["max_sequence_length"] = args.text_max_length
+            return official_encode_prompt(self, *prompt_args, **prompt_kwargs)
+
+        server.VA_Server.encode_prompt = encode_prompt_for_smoke
+
+    # The upstream repository spells this public config key ``franka_i2av``
+    # (the config module itself is named ``va_franka_i2va``).  Keep the typo
+    # here deliberately so the adapter follows the pinned official checkout.
+    official_config_name = "franka_i2av"
+    config = server.VA_CONFIGS[official_config_name]
     config.wan22_pretrained_model_name_or_path = str(args.model_path)
     config.input_img_path = str(args.input_dir)
     config.save_root = str(args.save_root)
@@ -90,16 +124,18 @@ def main() -> int:
     config.num_chunks_to_infer = args.num_chunks
     config.num_inference_steps = args.video_steps
     config.action_num_inference_steps = args.action_steps
+    config.height = args.height
+    config.width = args.width
     config.enable_offload = True
     config.infer_mode = "i2va"
 
     class RunArgs:
-        config_name = "franka_i2va"
+        config_name = official_config_name
         port = None
         save_root = str(args.save_root)
 
-    init_logger()
-    run(RunArgs())
+    server.init_logger()
+    server.run(RunArgs())
     return 0
 
 

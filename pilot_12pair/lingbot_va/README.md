@@ -1,7 +1,7 @@
 # LingBot-VA base deployment
 
 The official checkout and 24.4 GB checkpoint are intentionally kept outside Git.
-The repository adapter is `run_base_i2va.sh`; it uses the official `franka_i2va`
+The repository adapter is `run_base_i2va.sh`; it uses the official `franka_i2av`
 interface, one GPU, SDPA (`attn_mode="torch"`), CPU offload for VAE/text encoder,
 and one generated action/video chunk by default.
 
@@ -60,6 +60,22 @@ The combined task-smoke launcher generates one such sketch and invokes the base 
 ```bash
 ./pilot_12pair/lingbot_va/run_task_smoke.sh HCF-01 HARD
 ```
+
+On this four-A5000 host, the official 224x320 / 512-token / 5+10-step setting is
+CPU-offload bound and can take longer than a short smoke window. For a fast,
+explicitly non-scoring interface check, use a separate output directory:
+
+```bash
+LINGBOT_VA_TEXT_MAX_LENGTH=64 \
+LINGBOT_VA_VIDEO_STEPS=1 LINGBOT_VA_ACTION_STEPS=1 \
+LINGBOT_VA_HEIGHT=64 LINGBOT_VA_WIDTH=96 \
+LINGBOT_VA_TASK_OUTPUT=pilot_12pair/outputs/lingbot_va_hcf01_hard_fast_lowres \
+./pilot_12pair/lingbot_va/run_task_smoke.sh HCF-01 HARD
+```
+
+The run manifest records every fast-smoke override. The generated action tensor
+proves that the base interface is live; it is not a task-completion or causal
+understanding score.
 
 Set `LINGBOT_VA_TASK_OUTPUT` to a new directory for each run; this prevents outputs
 from different variants from being overwritten.

@@ -40,10 +40,19 @@ hypotheses:
 
 experiments:
   proxy_metric: "Task-pack invariant pass rate and LingBot-VA native action-output smoke completion"
-  baseline_value: null
-  best_value: null
-  total_runs: 0
-  trajectory: []
+  baseline_value: "LingBot-VA base fast interface smoke PASS; action (1,30,4,20,1), finite and nonzero"
+  best_value: "LingBot-VA base fast interface smoke PASS"
+  total_runs: 3
+  trajectory:
+    - run: 1
+      label: "base-default-config-retry"
+      outcome: "failed before inference: legacy top-level configs import kept /path/to/pretrained/model"
+    - run: 2
+      label: "base-default-224x320-512-5+10"
+      outcome: "stopped after 20 minutes without output; CPU offload bottleneck, no score"
+    - run: 3
+      label: "base-fast-interface-smoke"
+      outcome: "passed with explicit 64x96, text length 64, 1+1 diffusion steps; native action/video files written"
 
 outer_loop:
   cycle: 0

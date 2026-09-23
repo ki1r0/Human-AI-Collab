@@ -12,6 +12,9 @@ prompt=${LINGBOT_VA_PROMPT:-"Pick up the object, place it on the assembly fixtur
 chunks=${LINGBOT_VA_NUM_CHUNKS:-1}
 video_steps=${LINGBOT_VA_VIDEO_STEPS:-5}
 action_steps=${LINGBOT_VA_ACTION_STEPS:-10}
+text_max_length=${LINGBOT_VA_TEXT_MAX_LENGTH:-512}
+height=${LINGBOT_VA_HEIGHT:-224}
+width=${LINGBOT_VA_WIDTH:-320}
 
 if [[ ! -d "${lingbot_repo}" ]]; then
   echo "LingBot-VA checkout not found: ${lingbot_repo}" >&2
@@ -19,6 +22,7 @@ if [[ ! -d "${lingbot_repo}" ]]; then
 fi
 
 export PYTHONPATH="${lingbot_repo}:${repo_root}:${PYTHONPATH:-}"
+export LINGBOT_VA_REPO="${lingbot_repo}"
 export CUDA_VISIBLE_DEVICES="${gpu}"
 
 exec conda run --no-capture-output -n "${lingbot_env}" \
@@ -31,4 +35,7 @@ exec conda run --no-capture-output -n "${lingbot_env}" \
   --num-chunks "${chunks}" \
   --video-steps "${video_steps}" \
   --action-steps "${action_steps}" \
+  --text-max-length "${text_max_length}" \
+  --height "${height}" \
+  --width "${width}" \
   --gpu 0

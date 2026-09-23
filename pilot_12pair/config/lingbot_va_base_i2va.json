@@ -14,7 +14,8 @@
     "single_gpu_vram_target_gb": 18
   },
   "interface": {
-    "config": "franka_i2va",
+    "config_module": "va_franka_i2va",
+    "official_config_key": "franka_i2av",
     "input_cameras": [
       "observation.images.cam_high",
       "observation.images.cam_left_wrist",
