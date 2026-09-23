@@ -43,6 +43,18 @@ Use a rendered task scene only after its recipe has passed Isaac calibration. A 
 one image into three camera slots is acceptable for an interface smoke test, but must
 not be reported as a multi-view task evaluation.
 
+For a pre-USD interface smoke, the repository includes an unlabeled Pillow sketch
+generator. It is useful only to verify that the model consumes the three image slots:
+
+```bash
+PYTHONPATH=. conda run -n lingbot-va python \
+  -m pilot_12pair.lingbot_va.make_synthetic_observations \
+  --task-id HCF-01 --variant HARD \
+  --out-dir pilot_12pair/outputs/lingbot_va_synth_hcf_hard
+```
+
+Those sketches are intentionally not benchmark media and carry no task score.
+
 This base checkpoint has no adaptation for the gearbox embodiment. A native action
 chunk or generated video proves deployment and non-degenerate inference, not causal
 constraint understanding. Completion scores require an action adapter, a shared

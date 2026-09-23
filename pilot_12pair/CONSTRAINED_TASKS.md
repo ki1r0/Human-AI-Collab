@@ -34,6 +34,22 @@ actions incomplete. Isaac calibration must independently verify swept-volume,
 contact, reachability, visibility, and terminal predicates before a model score is
 reported.
 
+## Research-design rationale
+
+The task set follows three ideation checks. First, the problem-first statement is:
+current action policies can finish a demonstrated assembly while replaying a procedure
+that is invalid after a visible mechanism intervention. Second, boundary probing asks
+the same policy to cross one mechanism boundary at a time: head clearance, lateral
+access, keyway access, captive preload, and locating retention. Third, the simplicity
+test keeps every domain at two named actions and four terminal candidates, so an error
+cannot be hidden by a long-horizon planner or a language answer.
+
+The two-sentence claim is: *A successful assembly trace does not show that an action
+model knows which order is physically necessary. We pair identical goals and A→B
+demonstrations with one visible mechanism change, then measure whether the first
+manipulation branch changes exactly when B→A becomes feasible.* This is a diagnostic
+claim, not a claim that one successful fixture proves general physics understanding.
+
 ## What is still required for a scientific run
 
 - an Isaac builder that turns each recipe into a rendered USD layer;
