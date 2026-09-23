@@ -1,0 +1,177 @@
+{
+  "schema_version": "0.1.0-mvp",
+  "title": "Five matched constrained-assembly action tasks",
+  "status": "offline_contract_before_isaac_calibration",
+  "units": {
+    "length": "mm",
+    "angle": "deg",
+    "stage_meters_per_unit": 1.0,
+    "stage_up_axis": "Z"
+  },
+  "shared_contract": {
+    "source_geometry_units": "CAD STL millimetres",
+    "conversion_rule": "convert source millimetres to stage metres exactly once at scene-authoring time",
+    "render_collision_rule": "the same mutation parameter record must generate the visible opening and the compound collision geometry; no invisible blocking proxy",
+    "calibration_tolerance_mm": 0.25,
+    "minimum_intervention_margin_mm": 0.5,
+    "terminal_goal_rule": "both named actions must be complete; A-only and B-only are always incomplete",
+    "canonical_order": ["A", "B"],
+    "probe_orders": [["A", "B"], ["B", "A"], ["A"], ["B"]],
+    "model_observation_excludes": ["variant", "relation_label", "feasible_procedures", "oracle_events", "mutation_parameter"]
+  },
+  "source_assets": {
+    "Casing Top": {"visual": "assets/parts/Casing Top.usd", "measurement": "assets/CAD_edit/Casing Top.stl", "bbox_mm": [220.037, 277.267, 55.897]},
+    "Casing Base": {"visual": "assets/parts/Casing Base.usd", "measurement": "assets/CAD_edit/Casing Base.stl", "bbox_mm": [220.037, 277.267, 55.897]},
+    "Hub Cover Small": {"visual": "assets/parts/Hub Cover Small.usd", "measurement": "assets/CAD_edit/Hub Cover Small.stl", "bbox_mm": [14.800, 69.708, 69.711]},
+    "M6 Hub Bolt": {"visual": "assets/parts/M6 Hub Bolt.usd", "measurement": "assets/CAD_edit/M6 Hub Bolt.stl", "bbox_mm": [11.547, 26.150, 10.000]},
+    "Output Shaft": {"visual": "assets/parts/Output Shaft.usd", "measurement": "assets/CAD_edit/Output Shaft.stl", "bbox_mm": [73.500, 169.653, 73.500]},
+    "Thin washer": {"visual": "assets/CAD_edit/Thin washer.usd", "measurement": "assets/CAD_edit/Thin washer.stl", "bbox_mm": [71.995, 71.997, 1.000]},
+    "Output Gear": {"visual": "assets/parts/Output Gear.usd", "measurement": "assets/CAD_edit/Output Gear.stl", "bbox_mm": [161.157, 161.157, 27.000]},
+    "Output Key": {"visual": "assets/CAD_edit/Output Key.usd", "measurement": "assets/CAD_edit/Output Key.stl", "bbox_mm": [19.800, 29.700, 14.000]},
+    "M10 Casing Bolt": {"visual": "assets/parts/M10 Casing Bolt.usd", "measurement": "assets/CAD_edit/M10 Casing Bolt.stl", "bbox_mm": [19.514, 116.450, 16.900]},
+    "Dowel Pin": {"visual": "assets/CAD_edit/Dowel Pin_rescaled.usd", "measurement": "assets/CAD_edit/Dowel Pin_rescaled.stl", "bbox_mm": [13.800, 13.761, 59.700]}
+  },
+  "tasks": [
+    {
+      "task_id": "HCF-01",
+      "family": "closure_fastening",
+      "name": "small hub cover and headed fastener",
+      "purpose": "head clearance versus round-hole precedence",
+      "parts": ["Casing Top", "Hub Cover Small", "M6 Hub Bolt"],
+      "action_a": {"id": "A", "name": "seat_cover", "text": "Seat the small hub cover on the top casing and register its yaw."},
+      "action_b": {"id": "B", "name": "retain_bolt", "text": "Insert and quarter-turn the M6 hub bolt into the aligned guide bore."},
+      "goal": "Finish with the cover registered and the bolt retained; do not teleport or snap parts.",
+      "initial_state": "cover loose beside the casing; bolt loose in a visible rack; guide bore empty",
+      "geometry": {
+        "coordinate_frame": "cover-local XY, registration plane Z=0",
+        "cover_flange_thickness_mm": 5.0,
+        "fastener_shaft_diameter_mm": 5.88,
+        "fastener_head_diameter_mm": 11.70,
+        "round_hole_diameter_mm": 6.80,
+        "keyhole_neck_width_mm": 6.80,
+        "keyhole_lobe_diameter_mm": 13.60,
+        "prelock_yaw_deg": -12.0,
+        "final_yaw_deg": 0.0,
+        "head_underside_gap_mm": 5.35,
+        "cover_under_head_clearance_mm": 0.35,
+        "cutout_recipe": "round disk for HARD; union of neck disk, lobe disk, and exact swept shaft locus for COMMUTABLE",
+        "visible_evidence": "three openings and the pre-lock lobe are visible in the close camera"
+      },
+      "variants": {
+        "HARD": {"cutout": "round", "relation": "HARD", "can_b_before_a": false, "intervention_margin_mm": 0.90, "feasibility_reason": "11.70 mm retained head cannot pass a 6.80 mm round opening"},
+        "COMMUTABLE": {"cutout": "keyhole", "relation": "COMMUTABLE", "can_b_before_a": true, "intervention_margin_mm": 0.95, "feasibility_reason": "13.60 mm lobe admits the 11.70 mm head during the -12 degree pre-lock motion"}
+      },
+      "events": {"A": "cover_seated", "B": "bolt_retained"}
+    },
+    {
+      "task_id": "WSG-01",
+      "family": "access",
+      "name": "output-shaft washer and output gear",
+      "purpose": "laterally accessible versus covered washer seat",
+      "parts": ["Output Shaft", "Thin washer", "Output Gear"],
+      "action_a": {"id": "A", "name": "seat_washer", "text": "Place the thin washer flat on the output-shaft shoulder."},
+      "action_b": {"id": "B", "name": "mount_output_gear", "text": "Lower the output gear onto the output shaft and seat it."},
+      "goal": "Finish with the washer on the shoulder and the output gear fully seated.",
+      "initial_state": "output shaft fixed in the fixture; washer and gear separated on the parts tray",
+      "geometry": {
+        "washer_outer_diameter_mm": 72.0,
+        "washer_thickness_mm": 1.0,
+        "gear_bounding_diameter_mm": 161.157,
+        "gear_skirt_bottom_clearance_mm": 1.25,
+        "side_slot_width_mm": 2.0,
+        "required_side_insertion_clearance_mm": 1.25,
+        "mutation_surface": "the gear-seat shroud, not the washer mesh, is changed",
+        "cutout_recipe": "HARD uses a closed annular shroud; COMMUTABLE subtracts a radial side slot whose width exceeds washer thickness plus tolerance",
+        "visible_evidence": "the closed shroud or radial slot is visible from the oblique camera"
+      },
+      "variants": {
+        "HARD": {"side_slot": false, "relation": "HARD", "can_b_before_a": false, "intervention_margin_mm": 0.75, "feasibility_reason": "the seated gear covers every vertical and radial path to the washer shoulder"},
+        "COMMUTABLE": {"side_slot": true, "relation": "COMMUTABLE", "can_b_before_a": true, "intervention_margin_mm": 0.75, "feasibility_reason": "the visible 2.00 mm radial slot leaves 0.75 mm clearance over the 1.00 mm washer"}
+      },
+      "events": {"A": "washer_seated", "B": "gear_seated"}
+    },
+    {
+      "task_id": "KEY-01",
+      "family": "access",
+      "name": "output-shaft key and output gear",
+      "purpose": "end-closed keyway versus open-ended key access",
+      "parts": ["Output Shaft", "Output Key", "Output Gear"],
+      "action_a": {"id": "A", "name": "insert_output_key", "text": "Slide the output key fully into the shaft keyway."},
+      "action_b": {"id": "B", "name": "mount_output_gear", "text": "Mount and seat the output gear over the keyed shaft."},
+      "goal": "Finish with the key fully seated and the gear mounted without collision.",
+      "initial_state": "keyway entrance and gear bore are visible; key and gear are loose on the tray",
+      "geometry": {
+        "key_length_mm": 29.70,
+        "key_width_mm": 19.80,
+        "key_height_mm": 14.00,
+        "keyway_entry_clearance_mm": 0.50,
+        "gear_bore_length_mm": 27.00,
+        "side_access_width_mm": 21.00,
+        "mutation_surface": "the outer end of the shaft keyway and matching gear skirt",
+        "cutout_recipe": "HARD closes the keyway entrance under the gear footprint; COMMUTABLE leaves a side-open keyway with a 21.00 mm access window",
+        "visible_evidence": "the keyway end or side-open window is visible before either action"
+      },
+      "variants": {
+        "HARD": {"open_ended_keyway": false, "relation": "HARD", "can_b_before_a": false, "intervention_margin_mm": 0.75, "feasibility_reason": "the mounted gear covers the only key insertion corridor"},
+        "COMMUTABLE": {"open_ended_keyway": true, "relation": "COMMUTABLE", "can_b_before_a": true, "intervention_margin_mm": 0.75, "feasibility_reason": "the side-open 21.00 mm window remains reachable after the gear is mounted"}
+      },
+      "events": {"A": "key_seated", "B": "gear_seated"}
+    },
+    {
+      "task_id": "CAS-01",
+      "family": "closure_fastening",
+      "name": "casing closure and through-bolt",
+      "purpose": "post-closure bore alignment versus captive bolt preload",
+      "parts": ["Casing Base", "Casing Top", "M10 Casing Bolt"],
+      "action_a": {"id": "A", "name": "close_casing", "text": "Lower and seat the casing top onto the casing base."},
+      "action_b": {"id": "B", "name": "insert_casing_bolt", "text": "Insert the M10 casing through-bolt and seat its head."},
+      "goal": "Finish with the casing top seated and the through-bolt fully seated.",
+      "initial_state": "casing halves separated; bolt visible in its rack; top-side and base-side lugs visible",
+      "geometry": {
+        "casing_bbox_mm": [220.037, 277.267, 55.897],
+        "bolt_head_envelope_mm": [19.514, 16.900],
+        "bolt_axis_length_mm": 116.45,
+        "through_bore_diameter_mm": 20.50,
+        "lug_alignment_tolerance_mm": 0.50,
+        "captive_pocket_depth_mm": 18.00,
+        "head_clearance_mm": 1.50,
+        "mutation_surface": "top-side lug around the through-bolt hole",
+        "cutout_recipe": "HARD has a blind top lug and continuous bore only after mating; COMMUTABLE adds a visible captive pocket that retains the bolt without blocking mating",
+        "visible_evidence": "the blind lug or captive pocket is visible in the top-side close view"
+      },
+      "variants": {
+        "HARD": {"captive_pocket": false, "relation": "HARD", "can_b_before_a": false, "intervention_margin_mm": 1.00, "feasibility_reason": "the separated lug does not form a continuous through-bore"},
+        "COMMUTABLE": {"captive_pocket": true, "relation": "COMMUTABLE", "can_b_before_a": true, "intervention_margin_mm": 1.00, "feasibility_reason": "the 18.00 mm visible pocket retains the bolt head with 1.50 mm clearance during closure"}
+      },
+      "events": {"A": "casing_seated", "B": "bolt_seated"}
+    },
+    {
+      "task_id": "DOW-01",
+      "family": "closure_fastening",
+      "name": "casing closure and locating dowel",
+      "purpose": "split locating bore versus captive preloaded dowel",
+      "parts": ["Casing Base", "Casing Top", "Dowel Pin"],
+      "action_a": {"id": "A", "name": "close_casing", "text": "Lower and seat the casing top onto the casing base."},
+      "action_b": {"id": "B", "name": "insert_locating_dowel", "text": "Insert the locating dowel into the aligned casing bore."},
+      "goal": "Finish with the casing seated and the locating dowel fully inserted and stable.",
+      "initial_state": "casing halves separated; dowel upright on the tray; split bore and retaining features visible",
+      "geometry": {
+        "casing_bbox_mm": [220.037, 277.267, 55.897],
+        "dowel_diameter_mm": 13.80,
+        "dowel_length_mm": 59.70,
+        "bore_diameter_mm": 14.40,
+        "bore_depth_per_half_mm": 29.85,
+        "captive_slot_width_mm": 15.20,
+        "required_dowel_radial_clearance_mm": 0.30,
+        "mutation_surface": "the top-side locating feature",
+        "cutout_recipe": "HARD uses two half-bores that become continuous only after seating; COMMUTABLE adds a visible open retaining slot sized for the dowel before closure",
+        "visible_evidence": "the split bore or open retaining slot is visible from the top-side close view"
+      },
+      "variants": {
+        "HARD": {"open_retaining_slot": false, "relation": "HARD", "can_b_before_a": false, "intervention_margin_mm": 0.60, "feasibility_reason": "neither half-bore retains a stable dowel without the mating half"},
+        "COMMUTABLE": {"open_retaining_slot": true, "relation": "COMMUTABLE", "can_b_before_a": true, "intervention_margin_mm": 0.80, "feasibility_reason": "the visible 15.20 mm slot retains the 13.80 mm dowel with 0.70 mm diametral clearance"}
+      },
+      "events": {"A": "casing_seated", "B": "dowel_seated"}
+    }
+  ]
+}

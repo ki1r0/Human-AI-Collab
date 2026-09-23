@@ -1,0 +1,59 @@
+project:
+  title: "Constrained assembly action-model MVP"
+  question: "Can an action/world-action model change its manipulation branch when a visible mechanism changes hard precedence into commutability?"
+  status: active
+  started: "2026-09-23"
+  domain: "embodied action models and causal assembly benchmarks"
+
+literature:
+  key_papers:
+    - id: lingbot-va-2026
+      title: "LingBot-VA: Causal World Modeling for Robot Control"
+      authors: "Li et al."
+      year: 2026
+      relevance: "Base video-action world model used as the first action-model smoke baseline."
+      url: "https://arxiv.org/abs/2601.21998"
+    - id: pilot-12-pair
+      title: "CausalAssembly 12-Pair Falsification Pilot"
+      authors: "Project execution plan"
+      year: 2026
+      relevance: "Defines matched HARD/COMMUTABLE interventions and oracle requirements."
+  open_problems:
+    - "The official LingBot-VA base checkpoint is not trained for this custom gearbox embodiment; zero-shot action output is a capability smoke test, not a task success claim."
+    - "The repository has rich source CAD but no five-task Isaac execution scenes with calibrated mutation geometry yet."
+  evidence_gaps:
+    - "Robot action trajectories and a calibrated collision oracle are required before claiming physics understanding."
+
+hypotheses:
+  - id: H1
+    statement: "A physically sensitive action policy should select different first branches on paired HARD and COMMUTABLE initial states under the same goal."
+    status: active
+    motivation: "Separates sequence replay from constraint-sensitive manipulation."
+    parent: null
+    priority: high
+  - id: H2
+    statement: "LingBot-VA base can be deployed and produce native video-action chunks, but custom-task completion requires embodiment/task adaptation."
+    status: active
+    motivation: "Tests the model interface before investing in post-training data conversion."
+    parent: null
+    priority: high
+
+experiments:
+  proxy_metric: "Task-pack invariant pass rate and LingBot-VA native action-output smoke completion"
+  baseline_value: null
+  best_value: null
+  total_runs: 0
+  trajectory: []
+
+outer_loop:
+  cycle: 0
+  last_direction: "deepen"
+  last_reflection: "Bootstrap task definitions and isolate the model environment before any fine-tuning."
+
+workspace:
+  findings: "findings.md"
+  log: "research-log.md"
+  literature_dir: "literature/"
+  experiments_dir: "experiments/"
+  to_human_dir: "to_human/"
+  paper_dir: "paper/"

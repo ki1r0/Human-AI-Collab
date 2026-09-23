@@ -1,0 +1,115 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "World"
+{
+    custom string task:render_collision_contract = "shared mutation parameters"
+    custom string task:task_id = "WSG-01"
+    custom string task:variant = "COMMUTABLE"
+
+    def PhysicsScene "physicsScene"
+    {
+    }
+
+    def "Looks"
+    {
+        def Material "MutationFeature"
+        {
+            token outputs:surface.connect = </World/Looks/MutationFeature/Shader.outputs:surface>
+
+            def Shader "Shader"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.42, 0.48, 0.52)
+                float inputs:roughness = 0.55
+                token outputs:surface
+            }
+        }
+    }
+
+    def Xform "parts"
+    {
+        def Xform "Output_Shaft"
+        {
+            float3 xformOp:scale = (0.001, 0.001, 0.001)
+            double3 xformOp:translate = (0, 0, 0.02)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+
+            def Xform "Asset" (
+                prepend references = @../../../assets/parts/Output Shaft.usd@
+            )
+            {
+            }
+        }
+
+        def Xform "Thin_washer"
+        {
+            float3 xformOp:scale = (0.001, 0.001, 0.001)
+            double3 xformOp:translate = (0.22, 0, 0.02)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+
+            def Xform "Asset" (
+                prepend references = @../../../assets/CAD_edit/Thin washer.usd@
+            )
+            {
+            }
+        }
+
+        def Xform "Output_Gear"
+        {
+            float3 xformOp:scale = (0.001, 0.001, 0.001)
+            double3 xformOp:translate = (0.44, 0, 0.02)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+
+            def Xform "Asset" (
+                prepend references = @../../../assets/parts/Output Gear.usd@
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "mutation_fixture"
+    {
+        def Cube "shroud_0" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            rel material:binding = </World/Looks/MutationFeature>
+            color3f[] primvars:displayColor = [(0.42, 0.48, 0.52)]
+            double size = 1
+            float3 xformOp:scale = (0.029, 0.005, 0.006)
+            double3 xformOp:translate = (0, 0.041, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "shroud_1" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            rel material:binding = </World/Looks/MutationFeature>
+            color3f[] primvars:displayColor = [(0.42, 0.48, 0.52)]
+            double size = 1
+            float3 xformOp:scale = (0.029, 0.005, 0.006)
+            double3 xformOp:translate = (0, -0.041, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+
+        def Cube "shroud_2" (
+            prepend apiSchemas = ["PhysicsCollisionAPI"]
+        )
+        {
+            rel material:binding = </World/Looks/MutationFeature>
+            color3f[] primvars:displayColor = [(0.42, 0.48, 0.52)]
+            double size = 1
+            float3 xformOp:scale = (0.005, 0.029, 0.006)
+            double3 xformOp:translate = (0.041, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        }
+    }
+}
+
