@@ -55,6 +55,15 @@ PYTHONPATH=. conda run -n lingbot-va python \
 
 Those sketches are intentionally not benchmark media and carry no task score.
 
+The combined task-smoke launcher generates one such sketch and invokes the base model:
+
+```bash
+./pilot_12pair/lingbot_va/run_task_smoke.sh HCF-01 HARD
+```
+
+Set `LINGBOT_VA_TASK_OUTPUT` to a new directory for each run; this prevents outputs
+from different variants from being overwritten.
+
 This base checkpoint has no adaptation for the gearbox embodiment. A native action
 chunk or generated video proves deployment and non-degenerate inference, not causal
 constraint understanding. Completion scores require an action adapter, a shared
