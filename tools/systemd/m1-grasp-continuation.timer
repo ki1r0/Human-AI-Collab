@@ -1,0 +1,15 @@
+[Unit]
+Description=Retry the resumable M1 grasp calibration queue every five hours
+
+[Timer]
+# Start a retry five hours after this timer is activated or after the
+# previous service run finishes.  OnBootSec+Persistent can fire immediately
+# after a user session starts; this timer is intentionally armed without that
+# catch-up behavior so it cannot steal the GPU from an active run.
+OnActiveSec=5h
+OnUnitInactiveSec=5h
+Persistent=false
+Unit=m1-grasp-continuation.service
+
+[Install]
+WantedBy=timers.target

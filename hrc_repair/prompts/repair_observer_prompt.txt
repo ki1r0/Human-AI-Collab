@@ -1,0 +1,3 @@
+Assess only supplied RGB and allowed measured robot evidence. Return held, placed, target_visible,
+release_observed, and unsafe_visible as yes, no, or unknown. Execution completion, contact, or a helper report
+does not by itself prove placement. If depth/orientation/release cannot be assessed, return unknown.

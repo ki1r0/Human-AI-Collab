@@ -1,0 +1,8 @@
+[Unit]
+Description=Resumable M1 corrected Hub-cover grasp calibration
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Human-AI-Collab
+ExecStart=%h/Human-AI-Collab/tools/m1_grasp_continuation.sh
+Environment=PYTHONUNBUFFERED=1

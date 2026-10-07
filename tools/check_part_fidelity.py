@@ -28,6 +28,7 @@ SDF_ASSETS = {
     "Input Shaft", "Transfer Shaft", "Output Shaft",
     "M6 Hub Bolt", "M10 Casing Bolt", "M10 Casing Nut",
     "Breather Plug", "Oil Level Indicator",
+    "Hub Cover Output", "Hub Cover Input", "Hub Cover Small",
 }
 
 

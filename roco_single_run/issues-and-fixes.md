@@ -350,3 +350,26 @@
   pass, the two-frame video independently decodes, and no container remains.
 - **Fix:** Relative symlink aliases and explicit host provenance.
 - **Regression status:** PASS.
+
+## ISSUE-029 — Native Isaac Sim GUI crashes in the host NVIDIA GLX driver
+
+- **Symptom:** `ROCO_HEADLESS=0` exits almost immediately with a segmentation
+  fault before the RoCo Python environment is created.
+- **Hypothesis:** GPU 3 cannot present through the X11 session driven by GPU 0,
+  or the host's NVIDIA 550.163.01 driver is incompatible with the Isaac Sim 5.1
+  GUI path.
+- **Evidence:** The crash backtrace enters
+  `libGLX_nvidia.so.550.163.01` and `libcarb.graphics-vulkan.plugin.so` during
+  Kit renderer initialization. GPU 3 has display disabled, but a controlled
+  one-step retry on display-attached GPU 0 produced the same crash. NVIDIA lists
+  580.65.06 as its tested Isaac Sim 5.1 Linux driver.
+- **Experiment:** Retry native GUI on GPU 0, then launch the same rendering
+  application headlessly with private WebRTC enabled.
+- **Result:** Native GUI repeated the crash on GPU 0. WebRTC initialized Vulkan,
+  printed `Streaming server started`, and listened on TCP 49100 without a GLX
+  crash; the smoke was stopped before connecting a viewer.
+- **Fix:** Add a 580.65.06 native-GUI driver preflight and expose
+  `ROCO_LIVESTREAM=1` for the supported interactive stream path on the current
+  host. A native window requires a host driver upgrade.
+- **Regression status:** PASS for WebRTC server startup; BLOCKED for native GUI
+  until the host NVIDIA driver is upgraded.

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/hrc/repair_m0/planner_action.schema.json",
+  "type": "object",
+  "required": ["observation_id", "control_epoch", "action", "args"],
+  "properties": {
+    "observation_id": {"type": "string", "minLength": 1},
+    "control_epoch": {"type": "integer", "minimum": 0},
+    "action": {"enum": ["observe", "pick", "place", "retract", "help", "finish", "stop"]},
+    "args": {"type": "object"}
+  },
+  "additionalProperties": false
+}

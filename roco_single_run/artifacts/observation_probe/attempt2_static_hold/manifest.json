@@ -1,0 +1,157 @@
+{
+  "active_robot_bundle": "r1",
+  "array_sha256": {
+    "head_rgb": "e3b0a52cc53c6d6f971a459142017b8aae1c910046f1f97870d57c640e881be9",
+    "left_hand_rgb": "c1c17089d326137a6d246e691cbbdab4112cc454b18c810e8839050169be9ddd",
+    "qpos": "e232cc0dfdfc2e1727d147233520e468e56c79c9ad6ec0a5ab0cb7efad736547",
+    "right_hand_rgb": "28e2bde1a83e5c87a1e9cf9ef4addaee8800213afe2be07d9f048dfcd43b5c8e"
+  },
+  "camera_order": [
+    "head_rgb",
+    "left_hand_rgb",
+    "right_hand_rgb"
+  ],
+  "camera_summaries": {
+    "head_rgb": {
+      "device": "cuda:0",
+      "dtype": "torch.uint8",
+      "finite_fraction": 1.0,
+      "max": 230.0,
+      "mean": 106.61122131347656,
+      "min": 0.0,
+      "shape": [
+        1,
+        240,
+        320,
+        3
+      ],
+      "std": 69.27833557128906
+    },
+    "left_hand_rgb": {
+      "device": "cuda:0",
+      "dtype": "torch.uint8",
+      "finite_fraction": 1.0,
+      "max": 237.0,
+      "mean": 69.974609375,
+      "min": 0.0,
+      "shape": [
+        1,
+        240,
+        320,
+        3
+      ],
+      "std": 62.36901092529297
+    },
+    "right_hand_rgb": {
+      "device": "cuda:0",
+      "dtype": "torch.uint8",
+      "finite_fraction": 1.0,
+      "max": 208.0,
+      "mean": 43.49581527709961,
+      "min": 0.0,
+      "shape": [
+        1,
+        240,
+        320,
+        3
+      ],
+      "std": 39.85548400878906
+    }
+  },
+  "checks": {
+    "camera_dtype_uint8": true,
+    "camera_nonblack_nonconstant": true,
+    "camera_shape_1x240x320x3": true,
+    "npz_written": true,
+    "pngs_written": true,
+    "qpos_all_finite": true,
+    "qpos_dtype_float32": true,
+    "qpos_names_14": true,
+    "qpos_shape_1x14": true,
+    "r1_bundle": true
+  },
+  "classification": "confirmatory",
+  "control_dt_s": 0.05,
+  "package": "/home/sunsiliang/Human-AI-Collab/roco_single_run/artifacts/observation_probe/observation.npz",
+  "png_files": {
+    "head_rgb": "/home/sunsiliang/Human-AI-Collab/roco_single_run/artifacts/observation_probe/head_rgb.png",
+    "left_hand_rgb": "/home/sunsiliang/Human-AI-Collab/roco_single_run/artifacts/observation_probe/left_hand_rgb.png",
+    "right_hand_rgb": "/home/sunsiliang/Human-AI-Collab/roco_single_run/artifacts/observation_probe/right_hand_rgb.png"
+  },
+  "policy_observation_keys": [
+    "head_depth",
+    "head_rgb",
+    "left_arm_joint_pos",
+    "left_arm_joint_vel",
+    "left_gripper_joint_pos",
+    "left_gripper_joint_vel",
+    "left_hand_depth",
+    "left_hand_rgb",
+    "right_arm_joint_pos",
+    "right_arm_joint_vel",
+    "right_gripper_joint_pos",
+    "right_gripper_joint_vel",
+    "right_hand_depth",
+    "right_hand_rgb"
+  ],
+  "qpos_order": [
+    "left_arm_joint1",
+    "left_arm_joint2",
+    "left_arm_joint3",
+    "left_arm_joint4",
+    "left_arm_joint5",
+    "left_arm_joint6",
+    "left_gripper_axis1",
+    "right_arm_joint1",
+    "right_arm_joint2",
+    "right_arm_joint3",
+    "right_arm_joint4",
+    "right_arm_joint5",
+    "right_arm_joint6",
+    "right_gripper_axis1"
+  ],
+  "qpos_summary": {
+    "device": "cuda:0",
+    "dtype": "torch.float32",
+    "finite_fraction": 1.0,
+    "max": 1.773322582244873,
+    "mean": 0.14729689061641693,
+    "min": -1.1580134630203247,
+    "shape": [
+      1,
+      14
+    ],
+    "std": 0.8284193873405457
+  },
+  "qpos_values": [
+    [
+      -0.2804236114025116,
+      1.7531853914260864,
+      -0.3503882586956024,
+      0.24332964420318604,
+      0.7208301424980164,
+      0.34853988885879517,
+      0.030192237347364426,
+      -0.4035073518753052,
+      1.773322582244873,
+      -0.3307650685310364,
+      -0.6265447735786438,
+      -1.1580134630203247,
+      0.3126850128173828,
+      0.029714006930589676
+    ]
+  ],
+  "reset_to_step_mean_abs_pixel_difference": {
+    "head_rgb": 0.0,
+    "left_hand_rgb": 0.0,
+    "right_hand_rgb": 0.0
+  },
+  "seed": 23,
+  "sim_dt_s": 0.01,
+  "stage": "C",
+  "status": "PASS",
+  "task": "Template-Galaxea-Lab-Agent-Direct-v0",
+  "terminated": false,
+  "timestamp_s": 0.05,
+  "truncated": false
+}

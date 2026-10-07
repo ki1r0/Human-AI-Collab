@@ -284,14 +284,16 @@ HARDCODED_FIT_OFFSETS: Dict[Tuple[str, str, str, str], Dict[str, Tuple[float, fl
     # Input Shaft (axis Y): Rx(-90°) so long end (Y+) points upward in world.
     # Fine Z + tooth phase are clamped in HARDCODED_CHILD_LOCAL_* overrides.
     ("Input_Shaft", "Casing_Base", "plug_main", "socket_gear_input"): {
-        "translate": (0.0, 0.0, -116.0),
+        # Collision-on insertion seats at the measured -40-unit rest pose;
+        # -116 units penetrated the source casing wall.
+        "translate": (0.0, 0.0, -40.0),
         "rotate_xyz": (-90.0, 0.0, 0.0),
     },
     # Output Shaft (axis Y): Rx(-90°) so shoulder end faces downward.
     # Gear at Y=15.5 maps to Z=-15.5; offset positions output gear at
     # transfer-shaft pinion height for mesh contact.
     ("Output_Shaft", "Casing_Base", "plug_main", "socket_gear_output"): {
-        "translate": (0.0, 0.0, 48.0),
+        "translate": (0.0, 0.0, -40.0),
         "rotate_xyz": (-90.0, 0.0, 0.0),
     },
     # Direct top-side snap path: same shaft, but flipped end-for-end relative
@@ -302,19 +304,14 @@ HARDCODED_FIT_OFFSETS: Dict[Tuple[str, str, str, str], Dict[str, Tuple[float, fl
     },
     # Transfer Shaft (axis X): Ry(-90°) maps gear at X=22.1 to Z=-22.1.
     ("Transfer_Shaft", "Casing_Base", "plug_main", "socket_gear_transfer"): {
-        "translate": (0.0, 0.0, -27.0),
+        "translate": (0.0, 0.0, -40.0),
         "rotate_xyz": (0.0, -90.0, 0.0),
     },
-    # Casing_Base is authored with mirrored X/Z scale in the scene, so the top
-    # needs a 180deg Y flip during mating to bring its parting face down to meet
-    # the base. plug_casing_mate and socket_casing_mate are now both authored on
-    # their respective parting faces (each at local Z = -27.9), so the flip plus
-    # the plug<->socket snap already lands the faces flush — no extra Z shift.
-    # (The former translate Z=-55.8 = 2x27.9 was tuned for an older prim layout
-    # and double-counted once the sockets were re-authored symmetrically,
-    # opening a ~55.8-unit gap between the halves.)
+    # Casing_Base is authored with mirrored X/Z scale in the scene.  With the
+    # 180deg Y flip, a +55.8-unit translation seats the two source parting
+    # faces without interpenetration (the old zero offset overlapped them).
     ("Casing_Top", "Casing_Base", "plug_casing_mate", "socket_casing_mate"): {
-        "translate": (0.0, 0.0, 0.0),
+        "translate": (0.0, 0.0, 55.8),
         "rotate_xyz": (0.0, 180.0, 0.0),
     },
     # ── Hub covers ──────────────────────────────────────────────────────
@@ -380,11 +377,11 @@ HARDCODED_FIT_OFFSETS: Dict[Tuple[str, str, str, str], Dict[str, Tuple[float, fl
         "rotate_xyz": (90.0, 0.0, 0.0),
     },
     ("Oil_Level_Indicator", "Casing_Base", "plug_main", "socket_oil_1"): {
-        "translate": (13.0, 0.0, 0.0),
+        "translate": (21.0, 0.0, 0.0),
         "rotate_xyz": (90.0, -90.0, 0.0),
     },
     ("Oil_Level_Indicator", "Casing_Base", "plug_main", "socket_oil_2"): {
-        "translate": (-13.0, 0.0, 0.0),
+        "translate": (-21.0, 0.0, 0.0),
         "rotate_xyz": (90.0, 90.0, 0.0),
     },
     ("Breather_Plug", "Casing_Base", "plug_main", "socket_breather"): {
@@ -393,11 +390,12 @@ HARDCODED_FIT_OFFSETS: Dict[Tuple[str, str, str, str], Dict[str, Tuple[float, fl
     },
     # ── Nuts ────────────────────────────────────────────────────────────
     # Casing nuts are assembled as children of the already-installed casing
-    # bolts.  Their authored axes match the bolt axis, so keep identity here
-    # and apply the measured axial seat as a child-local translate override.
+    # bolts.  The source nut's hole axis is local X while the bolt axis is
+    # local Y, so rotate the nut 90° about local Z before applying the axial
+    # seat override.
     ("M10_Casing_Nut", "M10_Casing_Bolt", "plug_main", ""): {
         "translate": (0.0, 0.0, 0.0),
-        "rotate_xyz": (0.0, 0.0, 0.0),
+        "rotate_xyz": (0.0, 0.0, 90.0),
     },
 }
 
@@ -405,17 +403,23 @@ HARDCODED_FIT_OFFSETS: Dict[Tuple[str, str, str, str], Dict[str, Tuple[float, fl
 # These are applied to child-local translation (under parent), while keeping
 # solved rotation intact.  Key: (partA, partB, plug, socket)
 HARDCODED_CHILD_LOCAL_Z: Dict[Tuple[str, str, str, str], float] = {
-    # Requirement: Transfer_Shaft under Casing_Base must sit at Z=-27.
-    ("Transfer_Shaft", "Casing_Base", "plug_main", "socket_gear_transfer"): -27.0,
-    # Measured from the actual pinion band center on the one-piece input shaft.
-    # The pinion tooth band is centered at local Y=-70, so Z=-74.9 places the
-    # band center on the Transfer_Gear mid-plane at world Z=-4.9.
-    ("Input_Shaft", "Casing_Base", "plug_main", "socket_gear_input"): -74.9,
-    ("Output_Shaft", "Casing_Base", "plug_main", "socket_gear_output"): -18.32,
+    # Collision-on rest-pose audit: the three shaft roots settle at roughly
+    # -40 asset units in the source casing.  Deeper legacy poses intersected
+    # the casing collider even though the kinematic snap reported success.
+    ("Transfer_Shaft", "Casing_Base", "plug_main", "socket_gear_transfer"): -40.0,
+    ("Input_Shaft", "Casing_Base", "plug_main", "socket_gear_input"): -40.0,
+    ("Output_Shaft", "Casing_Base", "plug_main", "socket_gear_output"): -40.0,
     # Hub-cover bolts should sit slightly proud of the flange surface.
     ("M6_Hub_Bolt", "Casing_Top", "plug_main", "socket_bolt_hub_*"): 29.2,
     ("M6_Hub_Bolt", "Casing_Base", "plug_main", "socket_bolt_hub_*"): 29.2,
-    ("M10_Casing_Bolt", "Casing_Top", "plug_main", "socket_bolt_casing_*"): -31.6,
+    # The negative-Y pockets are shallower in the source Casing Top mesh, so
+    # their collision-on rest pose is -71.5 units instead of -86.
+    ("M10_Casing_Bolt", "Casing_Top", "plug_main", "socket_bolt_casing_1"): -86.0,
+    ("M10_Casing_Bolt", "Casing_Top", "plug_main", "socket_bolt_casing_2"): -86.0,
+    ("M10_Casing_Bolt", "Casing_Top", "plug_main", "socket_bolt_casing_3"): -71.5,
+    ("M10_Casing_Bolt", "Casing_Top", "plug_main", "socket_bolt_casing_4"): -71.5,
+    ("M10_Casing_Bolt", "Casing_Top", "plug_main", "socket_bolt_casing_5"): -86.0,
+    ("M10_Casing_Bolt", "Casing_Top", "plug_main", "socket_bolt_casing_6"): -86.0,
 }
 
 HARDCODED_CHILD_LOCAL_TRANSLATE: Dict[
@@ -444,8 +448,9 @@ HARDCODED_CHILD_LOCAL_TRANSLATE: Dict[
     # Measured from the assembled casing pair. The outer base surface around
     # the bolt axis sits at bolt-local Y=-44.44816131591773. With the nut
     # thickness of 6.300000190734865, the flush center location is:
-    #   -44.44816131591773 - 3.1500000953674325 = -47.59816141128516
-    ("M10_Casing_Nut", "M10_Casing_Bolt", "plug_main", ""): (0.0, -47.59816141128516, 0.0),
+    # Collision-on threading audit seats the nut at -58.37 source units.  The
+    # former -47.598 pose left the nut 21 mm above the physical rest pose.
+    ("M10_Casing_Nut", "M10_Casing_Bolt", "plug_main", ""): (0.0, -58.37, 0.0),
 }
 
 # Exact authored XYZ rotations for cases where multiple Euler decompositions are
@@ -1966,6 +1971,18 @@ class MagicAssemblyManager:
             p = rec.parent_path.rstrip("/").split("/")[-1]
             out.append((c, p))
         return out
+
+    def equivalent_names(self, name: str) -> List[str]:
+        """Return the registry-equivalent spellings for a scene prim name.
+
+        Assembly YAML keeps canonical names while imported scenes may retain a
+        legacy spelling (for example ``Hub_Cover_Input`` versus
+        ``Hub_Cover_Input_Top``).  Exposing this read-only lookup lets
+        validators compare identity without renaming or mutating the source
+        USD prims.
+        """
+        value = str(name or "")
+        return [value, *self._registry_synonyms(value)]
 
     def ensure_extra_hub_bolt_assets(self) -> Dict[str, int]:
         """Runtime hub-bolt asset mutation disabled after revert."""

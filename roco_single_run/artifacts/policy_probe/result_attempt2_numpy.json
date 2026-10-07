@@ -1,0 +1,33 @@
+{
+  "camera_order": [
+    "head_rgb",
+    "left_hand_rgb",
+    "right_hand_rgb"
+  ],
+  "checkpoint": "/home/sunsiliang/roco_runtime/checkpoints/roco_model_act_2/policy_best.ckpt",
+  "classification": "confirmatory",
+  "device": "cuda:0",
+  "error": "No module named 'numpy._core'",
+  "error_type": "ModuleNotFoundError",
+  "observation": "/home/sunsiliang/Human-AI-Collab/roco_single_run/artifacts/observation_probe/observation.npz",
+  "policy_config": {
+    "backbone": "resnet18",
+    "camera_names": [
+      "head_rgb",
+      "left_hand_rgb",
+      "right_hand_rgb"
+    ],
+    "dec_layers": 7,
+    "dim_feedforward": 3200,
+    "enc_layers": 4,
+    "hidden_dim": 512,
+    "kl_weight": 10,
+    "lr_backbone": 1e-05,
+    "nheads": 8,
+    "num_queries": 100
+  },
+  "stage": "D",
+  "stats": "/home/sunsiliang/roco_runtime/checkpoints/roco_model_act_2/dataset_stats.pkl",
+  "status": "ERROR",
+  "temporal_decay": 0.1
+}

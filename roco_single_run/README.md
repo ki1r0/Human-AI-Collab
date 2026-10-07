@@ -51,6 +51,32 @@ immutable candidate revision may also be overridden as a matched set. The
 wrapper deliberately defaults to `roco_model_act_2`, the only public candidate
 that produced any official score in testing.
 
+To watch the same live closed loop in the Isaac Sim GUI through the host X11
+session, use:
+
+```bash
+ROCO_HEADLESS=0 ROCO_GPU_DEVICE=0 \
+./roco_single_run/run_roco_single_episode.sh --max-steps 590
+```
+
+Visible mode requires valid `DISPLAY` and `XAUTHORITY` variables. The launcher
+checks both before starting Docker and continues to record the synchronized
+three-camera episode video and trace. Isaac Sim 5.1's tested Linux driver is
+580.65.06; this host currently has 550.163.01, so the launcher rejects native
+GUI mode before Kit reaches the known GLX startup crash.
+
+On a machine whose NVIDIA driver cannot create an Isaac Sim 5.1 native GUI,
+start the supported private-network WebRTC stream instead:
+
+```bash
+ROCO_LIVESTREAM=1 ROCO_GPU_DEVICE=0 \
+./roco_single_run/run_roco_single_episode.sh --max-steps 590
+```
+
+Connect one Isaac Sim WebRTC Streaming Client to `127.0.0.1`. The stream uses
+TCP port 49100 and UDP port 47998. Native GUI and livestream modes are mutually
+exclusive.
+
 ## Reproduced contract
 
 - Task: `Template-Galaxea-Lab-Agent-Direct-v0`, Galaxea R1, one environment.

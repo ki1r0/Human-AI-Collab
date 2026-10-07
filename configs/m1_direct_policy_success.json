@@ -1,0 +1,37 @@
+{
+  "name": "m1_direct_hold_release_drop",
+  "task": "step_14_hub_cover_output_top",
+  "child": "Hub_Cover_Output_Top",
+  "parent": "Casing_Top",
+  "interface": "plug_main -> socket_hub_output",
+  "orientation": "radial",
+  "radial_offset_m": 0.085,
+  "grasp_opening_m": 0.018,
+  "approach_opening_m": 0.045,
+  "z_offset_m": 0.041,
+  "gripper_contact_offset_m": 0.0001,
+  "post_grasp_tilt_correction_deg": [-4.0, -5.0],
+  "preserve_lift_grasp_frame": true,
+  "closed_loop_insertion": true,
+  "preinsert_height_m": 0.14,
+  "release_before_seat": true,
+  "release_opening_m": 0.05,
+  "release_open_steps": 1000,
+  "release_clearance_m": [0.0, 0.0, 0.0],
+  "hub_gravity_after_zero_contact": true,
+  "gravity_settle_steps": 500,
+  "step_scale": 0.5,
+  "nominal_physics": {
+    "sim_dt_s": 0.01,
+    "decimation": 5,
+    "hub_mass_kg": 5.7,
+    "hub_casing_contact_offset_m": 0.0001,
+    "hub_casing_rest_offset_m": -0.00005
+  },
+  "acceptance": {
+    "final_root_error_max_m": 0.01,
+    "final_speed_max_mps": 0.05,
+    "final_hub_casing_force_min_N": 0.001,
+    "release_finger_contact_max_N": 0.001
+  }
+}

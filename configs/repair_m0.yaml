@@ -1,0 +1,140 @@
+experiment:
+  name: repair_m0_hub_cover_to_casing_top
+  task_mode: placement
+  start_stage: preplace
+  method: repair
+  feedback_mode: privileged_debug
+  backend: isaac_subprocess
+  output_root: runs/repair_m0
+  record_video: true
+  author_prompt_commit: 0a3fb8a27acaa64b0e5caf9de40ec2beadef3b5c
+
+scene:
+  stage_path: assets/parts
+  robot_prim: /World/envs/env_0/Robot
+  cover_prim: /World/envs/env_0/Hub_Cover_Output_Top
+  hub_prim: /World/envs/env_0/Casing_Top
+  registered_goal_frame: socket_hub_output
+  validated_preplace_pose: hub_reset=(0.55,0.08683718,1.205)m; dynamic; four staging pads
+  validated_retract_pose: measured release TCP + (0,0,0.20)m
+  nominal_reset_snapshot: strict_launcher_reset_v1
+  meters_per_unit: 1.0
+  up_axis: Z
+  physics_dt_s: 0.01
+
+cameras:
+  - alias: head_rgb
+    prim_path: /World/envs/env_0/Robot/head_camera
+    enabled: true
+  - alias: left_hand_rgb
+    prim_path: /World/envs/env_0/Robot/left_hand_camera
+    enabled: true
+  - alias: right_hand_rgb
+    prim_path: /World/envs/env_0/Robot/right_hand_camera
+    enabled: true
+
+robot:
+  adapter_entrypoint: hrc_repair.adapter:IsaacSubprocessAdapter
+  controller_backend: existing_strict_isaac_waypoint_controller
+  joint_names_in_action_order:
+    - left_arm_joint.1
+    - left_arm_joint.2
+    - left_arm_joint.3
+    - left_arm_joint.4
+    - left_arm_joint.5
+    - left_arm_joint.6
+    - right_arm_joint.1
+    - right_arm_joint.2
+    - right_arm_joint.3
+    - right_arm_joint.4
+    - right_arm_joint.5
+    - right_arm_joint.6
+    - left_gripper_axis1
+    - right_gripper_axis1
+  action_units: radians
+  control_dt_s: 0.05
+  state_sample_period_s: 0.05
+  use_magic_combine: false
+  allow_part_pose_writes_during_episode: false
+
+model:
+  use_existing_client: true
+  provider: null
+  model_id: null
+  api_key_env_name: HRC_REPAIR_API_KEY
+  allow_silent_fallback: false
+  planner_prompt: hrc_repair/prompts/repair_planner_prompt.txt
+  auto_prompt: hrc_repair/prompts/repair_auto_prompt.txt
+  observer_prompt: hrc_repair/prompts/repair_observer_prompt.txt
+  planner_schema: hrc_repair/schemas/planner_action.schema.json
+  observer_schema: hrc_repair/schemas/observer_result.schema.json
+  request_timeout_s: 30
+  max_format_retries_per_call: 1
+
+controller:
+  staging_support_drop_m: 0.15
+  staging_support_retract_steps: 10
+  preplace_correct_orientation: false
+  camera_update_stride: 20
+  render_interval: 20
+
+helper:
+  allowed_request: clear_target_area
+  allowed_target: hub
+  intervention: registered_blocker_only
+  validated_motion_spec: null
+  post_intervention_settle_s: 0.5
+  require_safe_robot_state_before_start: true
+  allow_cover_hub_robot_pose_edits: false
+
+guards:
+  joint_limit_guard: true
+  workspace_bounds_m: null
+  motion_speed_limit_m_s: null
+  tracking_error_limit_m: null
+  skill_timeout_s: 240
+  unexpected_contact_guard_spec: existing_strict_metrics
+  load_channel: null
+  load_limit_value: null
+  load_unit: null
+  max_telemetry_age_s: 0.2
+  clear_old_action_queue_on_handoff: true
+  reject_old_control_epoch: true
+
+evaluator:
+  private_gt: true
+  feed_gt_to_planner: false
+  goal_relative_pose: casing_top_socket_hub_output
+  goal_region_half_extents_m: [0.004, 0.004, 0.008]
+  height_tolerance_m: 0.008
+  tilt_tolerance_deg: 2.0
+  yaw_tolerance_deg: 2.0
+  allowed_rotation_symmetries: []
+  require_release: true
+  require_target_support: true
+  require_bolt_pattern_alignment: false
+  stable_dwell_s: 0.5
+  stable_linear_speed_m_s: 0.01
+  stable_angular_speed_rad_s: 0.1
+
+budgets:
+  max_place_attempts_total: 3
+  max_help_requests_total: 1
+  max_high_level_actions_total: 12
+  max_model_calls_total: 28
+  episode_wall_timeout_s: 180
+  max_robot_motion_sim_s: 45
+
+fixed_retry:
+  retries_before_help: 1
+  place_once_after_help: true
+
+evaluation:
+  pilot_seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  held_out_seeds: [100, 101, 102, 103, 104, 105, 106, 107, 108, 109]
+  scenarios: [nominal, blocked]
+  methods: [auto, fixed_retry, repair]
+  randomize_method_order: true
+  record_wall_and_sim_time_separately: true
+  save_failures: true
+  persist_full_reset_state: true

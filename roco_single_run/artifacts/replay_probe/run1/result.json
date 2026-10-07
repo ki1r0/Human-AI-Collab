@@ -1,0 +1,17 @@
+{
+  "active_robot_bundle": "r1",
+  "classification": "confirmatory",
+  "dataset": "/home/sunsiliang/roco_runtime/datasets/rocochallenge2025/gearbox_assembly_demos_updated/1.hdf5",
+  "dataset_actual_sha256": "dd7ade042484b4fc5a868df6f17df0a90ccdebbd6b1e309d916bbd2e2450d434",
+  "dataset_actual_size": 951664104,
+  "dataset_expected_sha256": "dd7ade042484b4fc5a868df6f17df0a90ccdebbd6b1e309d916bbd2e2450d434",
+  "dataset_expected_size": 951664104,
+  "error": "property 'device' of 'DataReplayPolicyWrapper' object has no setter",
+  "error_type": "AttributeError",
+  "seed": 1,
+  "seed_provenance": "heuristic_only_dataset_omits_reset_seed",
+  "stage": "E",
+  "status": "ERROR",
+  "task": "Template-Galaxea-Lab-Agent-Direct-v0",
+  "wrapper_class": "DataReplayPolicyWrapper"
+}

@@ -880,7 +880,7 @@ class SequenceRunner:
             return {"error": "not loaded"}
 
         ts = self._ensure_task_state()
-        actual = dict(self._snapshot())  # child -> parent
+        actual_pairs = list(self._snapshot())
 
         expected_attachments: Dict[str, str] = {}
         for step_id in ts.completed_steps:
@@ -895,27 +895,54 @@ class SequenceRunner:
         wrong_parent = []  # attached to wrong parent
         unexpected = []    # in actual but not expected
 
-        for child, expected_parent in expected_attachments.items():
-            actual_parent = actual.get(child)
-            if actual_parent is None:
-                missing.append({"child": child, "expected_parent": expected_parent})
-            elif actual_parent != expected_parent:
-                wrong_parent.append({
-                    "child": child,
-                    "expected_parent": expected_parent,
-                    "actual_parent": actual_parent,
-                })
+        matched_actual = set()
 
-        for child, actual_parent in actual.items():
-            if child not in expected_attachments:
-                unexpected.append({"child": child, "actual_parent": actual_parent})
+        def equivalents(name: str) -> set[str]:
+            lookup = getattr(self._ma, "equivalent_names", None)
+            if callable(lookup):
+                try:
+                    return {str(value) for value in lookup(name)}
+                except Exception:
+                    pass
+            return {str(name)}
+
+        for child, expected_parent in expected_attachments.items():
+            child_names = equivalents(child)
+            parent_names = equivalents(expected_parent)
+            found = None
+            for index, (actual_child, actual_parent) in enumerate(actual_pairs):
+                if index in matched_actual:
+                    continue
+                if actual_child in child_names and actual_parent in parent_names:
+                    found = (index, actual_parent)
+                    break
+            if found is None:
+                missing.append({"child": child, "expected_parent": expected_parent})
+                # A same-child attachment under another parent is a genuine
+                # wrong-parent result, not an alias mismatch.
+                for index, (actual_child, actual_parent) in enumerate(actual_pairs):
+                    if index not in matched_actual and actual_child in child_names:
+                        wrong_parent.append({
+                            "child": child,
+                            "expected_parent": expected_parent,
+                            "actual_parent": actual_parent,
+                        })
+                        missing.pop()
+                        matched_actual.add(index)
+                        break
+            else:
+                matched_actual.add(found[0])
+
+        for index, (actual_child, actual_parent) in enumerate(actual_pairs):
+            if index not in matched_actual:
+                unexpected.append({"child": actual_child, "actual_parent": actual_parent})
 
         ok = not missing and not wrong_parent
         report = {
             "ok": ok,
             "completed_steps": len(ts.completed_steps),
             "expected_attachments": len(expected_attachments),
-            "actual_attachments": len(actual),
+            "actual_attachments": len(actual_pairs),
             "missing": missing,
             "wrong_parent": wrong_parent,
             "unexpected": unexpected,

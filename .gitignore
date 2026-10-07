@@ -57,3 +57,12 @@ Thumbs.db
 # Docker / compose local env
 .env
 .env.local
+
+# Confidential/generated pilot artifacts and model cache
+pilot_12pair/outputs/
+
+# M1 runtime outputs (keep manifests/configs in source, never credentials or
+# evaluator-only labels in version control).
+runs/
+**/evaluator_private.jsonl
+**/episode.mp4

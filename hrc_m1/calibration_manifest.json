@@ -1,0 +1,252 @@
+{
+  "schema_version": 2,
+  "task_id": "m1_hub_cover_output_top_seat",
+  "interface_id": "Hub_Cover_Output_to_Casing_Top",
+  "status": "provisional_collision_on_probe",
+  "canonical": {
+    "sequence_step": "step_14_hub_cover_output_top",
+    "instance": "inst_025_combine_hub_cover_output_top",
+    "source_part": "Hub_Cover_Output_Top",
+    "target_part": "Casing_Top",
+    "plug": "plug_main",
+    "socket": "socket_hub_output"
+  },
+  "asset_sha256": {
+    "assets/parts/Hub Cover Output.usd": "4ef9d16e8a9566df05333074852d2e8a987c3a7b97b7cd730254bebca99a175c",
+    "assets/parts/Casing Top.usd": "36bc3032a594050413be9fc6d433d63b657a524f875275c78449c1cd26b80931"
+  },
+  "stage_and_scale": {
+    "usd_meters_per_unit": 0.01,
+    "roco_asset_scale": 0.002,
+    "physics_dt_s": 0.01,
+    "control_decimation": 5,
+    "gravity_in_m1_adapter": "disabled_for_held-cover_interface_probe"
+  },
+  "scene_calibration": {
+    "support_table_top_z_m": -0.05,
+    "support_table_center_m": [0.55, 0.0, -0.10],
+    "casing_reset_root_m": [0.55, 0.0, 1.0],
+    "hub_reset_root_m": [0.30, 0.45, 1.08],
+    "torso_runtime_override": false,
+    "torso_pose": "authored_zero_limits_and_zero_reset_posture",
+    "status": "provisional_scene_calibration; public pick/held passes; insertion and release remain blocked"
+  },
+  "isolated_trial_provenance": {
+    "status": "reported_pass_pending_reproduction",
+    "source": "assembly/physics_validation.json",
+    "source_pose_m": [0.0, 0.08684, 0.22],
+    "source_rotation_euler_xyz_deg": [-90.0, 180.0, 0.0],
+    "source_rotation_wxyz": [0.0, 0.0, 0.7071067812, 0.7071067812],
+    "axis": 2,
+    "velocity_mps": -0.08,
+    "expected_root_offset_m": 0.062,
+    "tolerance_m": 0.008,
+    "steps": 960,
+    "contact_offset_m": 0.0001,
+    "rest_offset_m": -0.00005,
+    "gravity": 0.0,
+    "interpretation": "Original isolated harness evidence; it is not a RoCo robot or composed-stage pass."
+  },
+  "composed_frame": {
+    "socket_authored_units": [0.0, 39.75, 27.9],
+    "plug_authored_units": [0.0, -3.66859, 0.0],
+    "magic_fit_offset_translate_units": [0.0, 0.0, 7.03],
+    "magic_fit_offset_rotate_xyz_deg": [-90.0, 180.0, 0.0],
+    "unoverridden_fit_child_root_units": [0.0, 39.75, 38.59859],
+    "unoverridden_fit_root_offset_m": [0.0, 0.0795, 0.07719718],
+    "magic_child_local_override_units": [0.0, 43.41859, 31.0],
+    "magic_override_root_offset_m": [0.0, 0.08683718, 0.062],
+    "rotation_wxyz": [0.0, 0.0, 0.7071067812, 0.7071067812],
+    "coordinate_status": "audited_both_fit_and_override;_override_is_canonical;collision_on_probe_reaches_sub_mm_penetration"
+  },
+  "geometry_audit": {
+    "hub_stl_triangles": 10484,
+    "casing_stl_triangles": 116460,
+    "closed_manifold_edge_count_check": "passed_each_undirected_edge_counted_twice",
+    "visual_mesh_vs_source_check": "bounds_checked; composed collision-on probe completed",
+    "visual_collision_identity": "not_assumed; measured through PhysX contact-distance regression"
+  },
+  "physics_configuration": {
+    "hub_collision_approximation": "sdf",
+    "hub_sdf_margin_m": 0.0,
+    "hub_sdf_narrow_band_thickness_m": 0.0,
+    "casing_collision_approximation": "authored_triangle_mesh_none",
+    "sdf_resolution": 256,
+    "contact_offset_m": 0.0001,
+    "rest_offset_m": -0.00005,
+    "hub_mass_kg": 5.7,
+    "hub_mass_source": "STL_volume_times_7800_kg_per_m3_estimate",
+    "casing_mass_kg": 55.5,
+    "casing_mass_source": "STL_volume_times_7800_kg_per_m3_estimate",
+    "material": {
+      "static_friction": 0.45,
+      "dynamic_friction": 0.35,
+      "restitution": 0.0,
+      "source_status": "provisional_simulation_material_not_measured"
+    },
+    "contact_sensor": {
+      "force_matrix": "enabled_for_private_evaluator",
+      "contact_points": "enabled_for_private_evaluator; max_contact_data_count_per_prim=512",
+      "probe_observation": {
+        "exact_magic_override_raw_contact_count": "available through the high-capacity PhysX view",
+        "default_contact_point_buffer": 4,
+        "configured_contact_point_buffer": 512,
+        "latest_min_separation_m": -0.00009808874892769381,
+        "latest_penetration_m": 0.00009808874892769381,
+        "interpretation": "collision-on probe measured sub-millimetre contact penetration; this is provisional until robot-held insertion and release are calibrated"
+      }
+    }
+  },
+  "roco_migration": {
+    "status": "provisional_collision_on_interface_probe",
+    "latest_trial": "validation_logs/m1_physics_trial_default_20260926T1810Z/",
+    "latest_trial_status": "PROVISIONAL_PASS_collision_on_reset_only",
+    "latest_trial_velocity_mps": -0.008,
+    "latest_trial_result": {
+      "axial_depth_m": 0.06763625144958496,
+      "radial_error_m": 0.0004317585553508252,
+      "tilt_deg": 1.8704722223747807,
+      "contact_valid": true,
+      "penetration_m": 0.000098581520433072,
+      "stable": true,
+      "settle_speed_mps": 0.0032616970129311085,
+      "settle_window_s": 0.5499999999999999,
+      "physical_criteria_passed": true,
+      "evaluator_status": "PROVISIONAL_PASS"
+    },
+    "latest_skill_trace": {
+      "path": "validation_logs/m1_public_held_skill_smoke_20261001T050000/",
+      "status": "SKILL_SMOKE_ONLY_pick_held_pass_insertion_unverified",
+      "skills": ["pick", "preinsert", "insert"],
+      "pick_held_status": "HELD_CONFIRMED",
+      "pick_verification_reason": "filtered_pair_contact_and_object_follow;forces_N=64.471,73.916;hub_follow_m=0.082923;link6_m=0.113525",
+      "insert_seat_status": "SEAT_CANDIDATE_not_accepted",
+      "task_success": false,
+      "interpretation": "public pick reports a calibrated collision/contact and object-follow predicate; the trace does not establish insertion, seating, release, or post-seat stability"
+    },
+    "latest_fault_no_help_trace": {
+      "path": "validation_logs/m1_fault_no_help_prompt_hash_20260926T1930Z/",
+      "run_status": "SAFE_ABORT",
+      "state": "ABORT",
+      "turns": 1,
+      "skill_failure_code": "HELD_UNVERIFIED",
+      "held_status": "UNKNOWN",
+      "verifier_status": "UNKNOWN",
+      "insertion_attempted": false,
+      "interpretation": "after the unverified pick and absent verifier, the no-help policy safely aborted; RulePlanner is dev-only and this is not G2 evidence"
+    },
+    "additional_evidence": [
+      "validation_logs/m1_magic_seat_debug_quatfix.log",
+      "validation_logs/m1_fit_seat_triangle.log",
+      "validation_logs/m1_clearance_scan_nogravity.log",
+      "validation_logs/m1_free_slow_holdfix.log"
+    ],
+    "missing": [
+      "collision-on guarded insertion while held",
+      "measured inertia and friction",
+      "release and post-seat stability"
+    ],
+    "grasp_calibration": {
+      "status": "PICK_LIFT_REGRESSION_PASS_INSERTION_UNVERIFIED",
+      "evidence": "validation_logs/m1_grasp_blocker_20260926.md",
+      "photo_grasp_region": "inner_bore_inner_annular_wall;_not_outer_diameter",
+      "target_grasp_topology": "one_inside_one_outside_radial_annular_clamp",
+      "topology_note": "Earlier central-bore probes placed both fingers inside the bore and are invalid evidence against the requested clamp. Corrected topology places the lower-y jaw on the inner cylindrical wall and the opposing upper-y jaw on the outer circumference.",
+      "hub_broad_diameter_m_approx": 0.26,
+      "hub_thin_axis_m_approx": 0.028,
+      "tested_r1_opposing_finger_span_m_approx": 0.123,
+      "source_r1_contact_offset_m": 0.05,
+      "diagnostic_contact_offset_m": 0.0001,
+      "central_bore_path": "radial_inner_wall_route;_no_validated_held_lift",
+      "external_side_path": "no_validated_held_lift",
+      "inner_wall_probe_artifacts": [
+        "validation_logs/m1_inner_wall_probe_calibrated_20260929T134657/",
+        "validation_logs/m1_inner_wall_probe_preopen_calibrated_20260929T135303/",
+        "validation_logs/m1_inner_wall_probe_open040_calibrated_20260929T135626/",
+        "validation_logs/m1_inner_wall_probe_sensors_20260929T140000/",
+        "validation_logs/m1_inner_wall_probe_midopen_20260929T145000/",
+        "validation_logs/m1_inner_wall_probe_maxopen_20260929T144000/"
+      ],
+      "gripper_contact_instrumentation": {
+        "left_gripper_link1_to_hub_sensor": "enabled_diagnostic_filtered_contact_sensor",
+        "left_gripper_link2_to_hub_sensor": "enabled_diagnostic_filtered_contact_sensor",
+        "sensor_contract_status": "exposed_as_public_adapter_held_predicate",
+        "preopen_probe_force_norm_N": {
+          "left_gripper_link1": 0.0,
+          "left_gripper_link2": 0.0
+        },
+        "preopen_probe_hub_displacement_m": 0.0
+      },
+      "inner_wall_probe_result": "no_ejection_after_diagnostic_offset_override;_tested_waypoint_made_no_measured_finger_contact;_hub_displacement_zero_after_lift;_load_bearing_contact_unverified",
+      "opening_sweep_result": {
+        "actual_opening_0_0442_m": "hub_ejected_during_approach; displacement_norm_m=0.334925",
+        "actual_opening_0_0461_m": "hub_ejected_during_approach; displacement_norm_m=0.672938",
+        "interpretation": "No-contact_to_collision transition observed; no held-lift evidence"
+      },
+      "corrected_topology_isolated_artifact": "validation_logs/m1_inner_outer_isolated_video_20260929T223000/",
+      "corrected_topology_isolated_result": {
+        "candidate_verdict": "HELD_CANDIDATE",
+        "both_fingers_report_contact": true,
+        "max_reported_gripper_contact_force_N": 70.49908447265625,
+        "hub_lift_after_close_norm_m": 0.08962515741586685,
+        "link6_lift_after_close_norm_m": 0.1134103536605835,
+        "interpretation": "Diagnostic only: fixture and unrelated robot collisions disabled; not a full-scene or G1 pass."
+      },
+      "corrected_topology_full_scene_artifact": "validation_logs/m1_inner_outer_corrected_20260929T220000/",
+      "corrected_topology_full_scene_result": {
+        "candidate_verdict": "NO_REPORTED_FINGER_CONTACT",
+        "hub_displacement_norm_m": 0.8309274315834045,
+        "interpretation": "Full-scene run ejected the Hub during approach/closure; collision clearance/calibration remains unresolved."
+      },
+      "table_collision_bounds_artifact": "validation_logs/m1_scene_collision_bounds_20260930.json",
+      "table_collision_repair": {
+        "old_center_z_m": 0.3,
+        "old_top_z_m": 0.35,
+        "old_robot_aabb_overlaps": [
+          "/World/envs/env_0/Robot/base_link/collisions",
+          "/World/envs/env_0/Robot/torso_link1/collisions"
+        ],
+        "new_center_z_m": -0.1,
+        "new_top_z_m": -0.05,
+        "scope": "task_scoped_analytic_table_only; Hub/Casing/Robot USD unchanged"
+      },
+      "corrected_topology_full_scene_table_fixed_artifact": "validation_logs/m1_inner_outer_fullscene_tablefix_20260930T100000/",
+      "corrected_topology_full_scene_table_fixed_result": {
+        "candidate_verdict": "HELD_CANDIDATE",
+        "both_fingers_report_contact": true,
+        "max_reported_gripper_contact_force_N": 67.24346923828125,
+        "hub_lift_after_close_norm_m": 0.08966491371393204,
+        "link6_lift_after_close_norm_m": 0.11350338160991669,
+        "collision_filters_enabled": false,
+        "interpretation": "Full-collision pick/lift candidate after Robot-Table fixture repair; insertion, seating, release and post-seat stability remain unvalidated."
+      },
+      "public_held_skill_artifact": "validation_logs/m1_public_held_skill_smoke_20261001T050000/",
+      "public_held_skill_result": {
+        "held_status": "HELD_CONFIRMED",
+        "left_gripper_link1_force_N": 64.471,
+        "left_gripper_link2_force_N": 73.916,
+        "hub_follow_m": 0.082923,
+        "link6_follow_m": 0.113525,
+        "insert_seat_status": "SEAT_CANDIDATE_not_accepted",
+        "task_success": false,
+        "interpretation": "Public pick/held verification passes in the full scene; the same trace does not verify physical socket insertion or release."
+      },
+      "inner_wall_alignment_bounds_diagnostic": {
+        "hub_inner_radius_m_approx": 0.065,
+        "link1_radial_corner_range_m": [0.0150, 0.0658],
+        "link2_radial_corner_range_m": [0.0181, 0.0639],
+        "interpretation": "conservative transformed collision-mesh corner bounds; not a contact proof; bilateral millimetre-scale centering remains to be calibrated"
+      },
+      "interpretation": "The corrected one-inside/one-outside topology now has a full-scene collision-on pick/lift and public held predicate. The earlier ejection was confounded by the source robot's 0.05 m contact offset and the old table placement. G1 remains blocked because guarded socket insertion, release and post-seat stability are not yet verified. Do not use a kinematic, snap, teleport, reparent, or evaluator-only substitute."
+    },
+    "warnings": [
+      "RoCo desk is not used as the M1 support fixture; the task-scoped table is analytic",
+      "No claim of physical seating or robot skill success is made"
+    ]
+  },
+  "calibration_decision": {
+    "status": "BLOCKED_FOR_G1",
+    "reason": "The canonical composed-stage collision-on probe and the public one-inside/one-outside pick/held check pass their current criteria, but guarded socket insertion, release stability, and mass/inertia/friction calibration remain incomplete. Do not lower tolerances, disable collision, or teleport to convert this into PASS.",
+    "next_action": "Implement and run a collision-on robot-held pick/preinsert/guarded-insert/release regression; then freeze measured or sourced dynamics and rerun the full evaluator."
+  }
+}

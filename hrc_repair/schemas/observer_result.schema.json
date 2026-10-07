@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/hrc/repair_m0/observer_result.schema.json",
+  "type": "object",
+  "required": ["observation_id", "held", "placed", "target_visible", "release_observed", "unsafe_visible", "evidence", "frames_used"],
+  "properties": {
+    "observation_id": {"type": "string", "minLength": 1},
+    "held": {"enum": ["yes", "no", "unknown"]},
+    "placed": {"enum": ["yes", "no", "unknown"]},
+    "target_visible": {"enum": ["yes", "no", "unknown"]},
+    "release_observed": {"enum": ["yes", "no", "unknown"]},
+    "unsafe_visible": {"enum": ["yes", "no", "unknown"]},
+    "evidence": {"type": "string", "maxLength": 1600},
+    "frames_used": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+  },
+  "additionalProperties": false
+}

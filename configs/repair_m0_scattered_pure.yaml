@@ -1,0 +1,155 @@
+experiment:
+  name: repair_m0_hub_cover_to_casing_top_scattered_full_physics
+  task_mode: placement
+  start_stage: scattered
+  method: repair
+  feedback_mode: public_contact
+  backend: isaac_inprocess
+  output_root: runs/repair_m0_scattered_pure
+  record_video: true
+
+scene:
+  stage_path: assets/parts
+  robot_prim: /World/envs/env_0/Robot
+  cover_prim: /World/envs/env_0/Hub_Cover_Output_Top
+  hub_prim: /World/envs/env_0/Casing_Top
+  registered_goal_frame: socket_hub_output
+  initial_layout: scatter
+  start_stage: scattered
+  table_size_xy: [2.72, 1.8]
+  # Keep the tabletop below the R1 finger path.  The CAD bodies sit on the
+  # explicit physical support fixtures below, not on a reset-time pose.
+  table_top_z: 0.834
+  table_center_xy: [1.52, 0.0]
+  scatter_support_top_z: 0.934
+  scatter_physical_supports: true
+  scatter_spawn_margin_m: 0.002
+  casing_initial_xy: [0.55, 0.0]
+  cover_initial_xy: [0.30, 0.43]
+  meters_per_unit: 1.0
+  up_axis: Z
+  physics_dt_s: 0.01
+
+cameras:
+  - alias: head_rgb
+    prim_path: /World/envs/env_0/Robot/head_camera
+    enabled: true
+  - alias: left_hand_rgb
+    prim_path: /World/envs/env_0/Robot/left_hand_camera
+    enabled: true
+  - alias: right_hand_rgb
+    prim_path: /World/envs/env_0/Robot/right_hand_camera
+    enabled: true
+
+robot:
+  adapter_entrypoint: hrc_repair.adapter:IsaacPersistentWorkerAdapter
+  controller_backend: existing_strict_isaac_waypoint_controller
+  joint_names_in_action_order:
+    - left_arm_joint.1
+    - left_arm_joint.2
+    - left_arm_joint.3
+    - left_arm_joint.4
+    - left_arm_joint.5
+    - left_arm_joint.6
+    - right_arm_joint.1
+    - right_arm_joint.2
+    - right_arm_joint.3
+    - right_arm_joint.4
+    - right_arm_joint.5
+    - right_arm_joint.6
+    - left_gripper_axis1
+    - right_gripper_axis1
+  action_units: radians
+  control_dt_s: 0.05
+  state_sample_period_s: 0.05
+  use_magic_combine: false
+  allow_part_pose_writes_during_episode: false
+
+model:
+  use_existing_client: false
+  provider: local_http
+  model_id: Qwen/Qwen3-VL-2B-Instruct
+  api_key_env_name: HRC_REPAIR_API_KEY
+  allow_silent_fallback: false
+  allow_rule_fallback: false
+  planner_prompt: hrc_repair/prompts/repair_planner_prompt.txt
+  auto_prompt: hrc_repair/prompts/repair_auto_prompt.txt
+  observer_prompt: hrc_repair/prompts/repair_observer_prompt.txt
+  planner_schema: hrc_repair/schemas/planner_action.schema.json
+  observer_schema: hrc_repair/schemas/observer_result.schema.json
+  request_timeout_s: 60
+  max_format_retries_per_call: 1
+
+controller:
+  grip_opening_m: 0.005
+  release_opening_m: 0.05
+  gripper_static_friction: 10.0
+  gripper_dynamic_friction: 8.0
+  transport_clearance_z_m: 0.20
+  insert_safe_waypoint: true
+  follow_link_orientation: false
+  rotate_held_orientation: false
+  preplace_release_clearance_y_m: 0.0
+  m0_freeze_release_joints: true
+  m0_retract_segments: 10
+  m0_retract_segment_steps: 20
+  m0_retract_step_z_m: 0.02
+  camera_update_stride: 20
+  render_interval: 20
+  staging_support_drop_m: 0.05
+  staging_support_retract_steps: 1
+  staging_support_withdraw_mode: down
+
+helper:
+  allowed_request: clear_target_area
+  allowed_target: hub
+  intervention: registered_blocker_only
+  post_intervention_settle_s: 0.5
+  require_safe_robot_state_before_start: true
+  allow_cover_hub_robot_pose_edits: false
+
+guards:
+  joint_limit_guard: true
+  max_telemetry_age_s: 0.2
+  clear_old_action_queue_on_handoff: true
+  reject_old_control_epoch: true
+
+evaluator:
+  private_gt: true
+  feed_gt_to_planner: false
+  goal_relative_pose: casing_top_socket_hub_output
+  goal_region_half_extents_m: [0.012, 0.012, 0.020]
+  placement_release_motion_tolerance_m: 0.030
+  placement_retract_drift_tolerance_m: 0.030
+  height_tolerance_m: 0.020
+  tilt_tolerance_deg: 10.0
+  yaw_tolerance_deg: 10.0
+  allowed_rotation_symmetries: []
+  require_release: true
+  require_target_support: true
+  require_bolt_pattern_alignment: false
+  stable_dwell_s: 0.5
+  stable_linear_speed_m_s: 0.01
+  stable_angular_speed_rad_s: 0.1
+
+budgets:
+  max_place_attempts_total: 3
+  max_help_requests_total: 1
+  max_high_level_actions_total: 12
+  max_model_calls_total: 28
+  episode_wall_timeout_s: 1800
+  max_robot_motion_sim_s: 60
+
+fixed_retry:
+  retries_before_help: 1
+  place_once_after_help: true
+
+evaluation:
+  pilot_seeds: [0]
+  held_out_seeds: []
+  scenarios: [nominal]
+  methods: [repair]
+  randomize_method_order: false
+  record_wall_and_sim_time_separately: true
+  save_failures: true
+  persist_full_reset_state: true

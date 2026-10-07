@@ -1,0 +1,31 @@
+# Fast protocol-only harness. It intentionally does not produce physics/video evidence.
+experiment:
+  name: repair_m0_contract_smoke
+  task_mode: placement
+  start_stage: preplace
+  feedback_mode: scripted_debug
+  backend: contract_debug
+  output_root: runs/repair_m0_contract_smoke
+  record_video: false
+scene:
+  robot_prim: /World/envs/env_0/Robot
+  cover_prim: /World/envs/env_0/Hub_Cover_Output_Top
+  hub_prim: /World/envs/env_0/Casing_Top
+  registered_goal_frame: socket_hub_output
+  meters_per_unit: 1.0
+  physics_dt_s: 0.01
+robot:
+  adapter_entrypoint: hrc_repair.adapter:ContractAdapter
+  joint_names_in_action_order: [left_arm, right_arm, left_gripper, right_gripper]
+  use_magic_combine: false
+  allow_part_pose_writes_during_episode: false
+model:
+  allow_silent_fallback: false
+evaluator:
+  require_release: true
+budgets:
+  max_place_attempts_total: 3
+  max_help_requests_total: 1
+  max_high_level_actions_total: 12
+fixed_retry:
+  retries_before_help: 1

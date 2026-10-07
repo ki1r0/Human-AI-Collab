@@ -23,6 +23,12 @@ parser.add_argument("--stats", type=Path, required=True)
 parser.add_argument("--output-dir", type=Path, required=True)
 parser.add_argument("--max-steps", type=int, default=590)
 parser.add_argument("--video-fps", type=int, default=20)
+parser.add_argument("--temporal-decay", type=float, default=0.1,
+                    help="ACT aggregation decay; 1000 selects the newest prediction numerically.")
+parser.add_argument("--record-raw-chunks", action="store_true",
+                    help="Save model action chunks for post-run diagnosis; does not alter actions.")
+parser.add_argument("--use-env-time-limit", action="store_true",
+                    help="Diagnostic: use environment timeout instead of the rule-policy schedule cutoff.")
 parser.add_argument(
     "--expected-checkpoint-sha256",
     default="a2d0aa42ec1d39609637a40ac09b420ebc16335a199807ae42e2edff2bfce2b1",
@@ -189,13 +195,21 @@ def main() -> None:
         env = gym.make(args.task, cfg=env_cfg)
         observations, _ = env.reset(seed=args.seed)
         base_env = env.unwrapped
+        result["use_env_time_limit"] = args.use_env_time_limit
+        result["original_rule_horizon_physics_steps"] = int(base_env.rule_policy.total_time_steps)
+        if args.use_env_time_limit:
+            base_env.rule_policy.total_time_steps = torch.full_like(
+                base_env.rule_policy.total_time_steps,
+                int(base_env.max_episode_length * base_env.cfg.decimation),
+            )
+        result["effective_rule_horizon_physics_steps"] = int(base_env.rule_policy.total_time_steps)
         policy_observations = observations["policy"]
 
         policy = RocoActPolicy(
             args.checkpoint,
             args.stats,
             device=args.device,
-            temporal_decay=0.1,
+            temporal_decay=args.temporal_decay,
             expected_checkpoint_sha256=args.expected_checkpoint_sha256,
             expected_stats_sha256=args.expected_stats_sha256,
         )
@@ -213,6 +227,7 @@ def main() -> None:
         qpos_before_samples: list[np.ndarray] = []
         qpos_after_samples: list[np.ndarray] = []
         policy_action_samples: list[np.ndarray] = []
+        raw_chunk_samples: list[np.ndarray] = []
         environment_action_samples: list[np.ndarray] = []
         score_samples: list[int] = []
         reward_samples: list[float] = []
@@ -268,6 +283,8 @@ def main() -> None:
             start = time.perf_counter()
             trace = policy.predict_trace(qpos, images)
             inference_time = time.perf_counter() - start
+            if args.record_raw_chunks:
+                raw_chunk_samples.append(trace["raw_chunk"][0].detach().cpu().numpy().copy())
             policy_action = trace["denormalized_policy_action"]
             environment_action = trace["environment_action"]
             if not torch.isfinite(policy_action).all() or not torch.isfinite(
@@ -369,6 +386,7 @@ def main() -> None:
             qpos_before_policy_order=np.asarray(qpos_before_samples, dtype=np.float32),
             qpos_after_policy_order=np.asarray(qpos_after_samples, dtype=np.float32),
             policy_actions=np.asarray(policy_action_samples, dtype=np.float32),
+            raw_normalized_chunks=np.asarray(raw_chunk_samples, dtype=np.float32),
             environment_actions=np.asarray(environment_action_samples, dtype=np.float32),
             score=np.asarray(score_samples, dtype=np.int16),
             reward=np.asarray(reward_samples, dtype=np.float32),

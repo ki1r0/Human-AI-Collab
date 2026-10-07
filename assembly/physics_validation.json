@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "description": "Collision-on isolated interface trials for original gearbox USD parts. Positions are metres in a 1 m/unit test stage; source assets retain the canonical 0.002 scene scale.",
+  "contact_offset": 0.0001,
+  "rest_offset": -0.00005,
+  "steps": 960,
+  "trials": [
+    {
+      "name": "Transfer_Gear_to_Transfer_Shaft",
+      "canonical_steps": [],
+      "fixture_checks": ["asset_registry preassembled Transfer_Gear on Transfer_Shaft", "gear bore fit audit"],
+      "source": "Transfer Gear", "target": "Transfer Shaft",
+      "source_pos": [0.145, 0.0, 0.0], "target_pos": [0.0, 0.0, 0.0],
+      "source_rot": [0.0, 90.0, 0.0], "axis": 0, "velocity": -0.04,
+      "expected": 0.0442, "tolerance": 0.006
+    },
+    {
+      "name": "Output_Gear_to_Output_Shaft",
+      "canonical_steps": [],
+      "fixture_checks": ["asset_registry preassembled Output_Gear on Output_Shaft", "gear bore fit audit"],
+      "source": "Output Gear", "target": "Output Shaft",
+      "source_pos": [0.0, 0.22, 0.0], "target_pos": [0.0, 0.0, 0.0],
+      "source_rot": [-90.0, 0.0, 0.0], "axis": 1, "velocity": -0.08,
+      "expected": 0.0310, "tolerance": 0.008
+    },
+    {
+      "name": "Hub_Cover_Output_to_Casing_Top",
+      "canonical_steps": ["inst_025_combine_hub_cover_output_top"],
+      "source": "Hub Cover Output", "target": "Casing Top",
+      "source_pos": [0.0, 0.08684, 0.22], "target_pos": [0.0, 0.0, 0.0],
+      "source_rot": [-90.0, 180.0, 0.0], "axis": 2, "velocity": -0.08,
+      "expected": 0.0620, "tolerance": 0.008
+    },
+    {
+      "name": "Hub_Cover_Input_to_Casing_Top",
+      "canonical_steps": ["inst_024_combine_hub_cover_input_top"],
+      "source": "Hub Cover Input", "target": "Casing Top",
+      "source_pos": [0.07182, -0.109996, 0.22], "target_pos": [0.0, 0.0, 0.0],
+      "source_rot": [0.0, 90.0, 90.0], "axis": 2, "velocity": -0.08,
+      "expected": 0.0636, "tolerance": 0.008
+    },
+    {
+      "name": "Hub_Cover_Small_to_Casing_Top",
+      "canonical_steps": ["inst_026_combine_hub_cover_small_top"],
+      "source": "Hub Cover Small", "target": "Casing Top",
+      "source_pos": [-0.07260, -0.10920, 0.22], "target_pos": [0.0, 0.0, 0.0],
+      "source_rot": [0.0, 90.0, 0.0], "axis": 2, "velocity": -0.08,
+      "expected": 0.0614, "tolerance": 0.008
+    },
+    {
+      "name": "M6_Hub_Bolt_to_Casing_Top",
+      "canonical_steps": [
+        "inst_027_combine_m6_hub_bolt_01_top", "inst_028_combine_m6_hub_bolt_02_top",
+        "inst_029_combine_m6_hub_bolt_03_top", "inst_030_combine_m6_hub_bolt_04_top",
+        "inst_031_combine_m6_hub_bolt_05_top", "inst_032_combine_m6_hub_bolt_06_top",
+        "inst_033_combine_m6_hub_bolt_07_top", "inst_034_combine_m6_hub_bolt_08_top",
+        "inst_035_combine_m6_hub_bolt_09_top", "inst_036_combine_m6_hub_bolt_10_top",
+        "inst_037_combine_m6_hub_bolt_11_top", "inst_038_combine_m6_hub_bolt_12_top"
+      ],
+      "source": "M6 Hub Bolt", "target": "Casing Top",
+      "source_pos": [0.08, 0.0, 0.11], "target_pos": [0.0, 0.0, 0.0],
+      "source_rot": [90.0, 0.0, 0.0], "axis": 2, "velocity": -0.02,
+      "expected": 0.0428, "tolerance": 0.006
+    },
+    {
+      "name": "Input_Shaft_to_Casing_Base",
+      "canonical_steps": ["inst_052_combine_input_shaft"],
+      "source": "Input Shaft", "target": "Casing Base",
+      "source_pos": [0.062, -0.09938, 0.40], "target_pos": [0.0, 0.0, 0.0],
+      "source_rot": [-90.0, 0.0, 0.0], "axis": 2, "velocity": -0.12,
+      "expected": -0.0800, "tolerance": 0.012
+    },
+    {
+      "name": "Transfer_Shaft_to_Casing_Base",
+      "canonical_steps": ["inst_054_combine_transfer_shaft"],
+      "source": "Transfer Shaft", "target": "Casing Base",
+      "source_pos": [-0.062, -0.09938, 0.40], "target_pos": [0.0, 0.0, 0.0],
+      "source_rot": [0.0, -90.0, 0.0], "axis": 2, "velocity": -0.12,
+      "expected": -0.0800, "tolerance": 0.012
+    },
+    {
+      "name": "Output_Shaft_to_Casing_Base",
+      "canonical_steps": ["inst_053_combine_output_shaft"],
+      "source": "Output Shaft", "target": "Casing Base",
+      "source_pos": [0.0, 0.07950, 0.40], "target_pos": [0.0, 0.0, 0.0],
+      "source_rot": [-90.0, 0.0, 0.0], "axis": 2, "velocity": -0.12,
+      "expected": -0.0800, "tolerance": 0.012
+    },
+    {
+      "name": "Casing_Top_to_Casing_Base",
+      "canonical_steps": ["inst_055_combine_casing_top"],
+      "source": "Casing Top", "target": "Casing Base",
+      "source_pos": [0.0, 0.0, 0.30], "target_pos": [0.0, 0.0, 0.0],
+      "source_rot": [0.0, 180.0, 0.0], "axis": 2, "velocity": -0.08,
+      "expected": 0.1116, "tolerance": 0.012
+    },
+    {
+      "name": "M10_Casing_Bolt_to_Casing_Top",
+      "canonical_steps": [
+        "inst_057_combine_m10_casing_bolt_01", "inst_058_combine_m10_casing_bolt_02",
+        "inst_059_combine_m10_casing_bolt_03", "inst_060_combine_m10_casing_bolt_04",
+        "inst_061_combine_m10_casing_bolt_05", "inst_062_combine_m10_casing_bolt_06"
+      ],
+      "source": "M10 Casing Bolt", "target": "Casing Top",
+      "source_pos": [-0.12, 0.24, -0.30], "target_pos": [0.0, 0.0, 0.0],
+      "source_rot": [90.0, 0.0, 0.0], "axis": 2, "velocity": 0.08,
+      "expected": -0.1720, "tolerance": 0.012
+    },
+    {
+      "name": "Breather_Plug_to_Casing_Base",
+      "canonical_steps": ["inst_071_combine_breather_plug"],
+      "source": "Breather Plug", "target": "Casing Base",
+      "source_pos": [0.0, 0.33, 0.0], "target_pos": [0.0, 0.0, 0.0],
+      "source_rot": [0.0, 0.0, 0.0], "axis": 1, "velocity": -0.025,
+      "expected": 0.2899, "tolerance": 0.003
+    },
+    {
+      "name": "Oil_Level_Indicator_to_Casing_Base",
+      "canonical_steps": ["inst_072_combine_oil_level_indicator_01", "inst_073_combine_oil_level_indicator_02"],
+      "source": "Oil Level Indicator", "target": "Casing Base",
+      "source_pos": [0.35, 0.0, 0.0], "target_pos": [0.0, 0.0, 0.0],
+      "source_rot": [90.0, -90.0, 0.0], "axis": 0, "velocity": -0.08,
+      "expected": 0.2320, "tolerance": 0.012
+    },
+    {
+      "name": "Hub_Cover_Output_to_Casing_Base",
+      "canonical_steps": ["inst_005_combine_hub_cover_output_base"],
+      "source": "Hub Cover Output", "target": "Casing Base",
+      "source_pos": [0.0, 0.08684, 0.22], "target_pos": [0.0, 0.0, 0.0],
+      "source_rot": [-90.0, 180.0, 0.0], "axis": 2, "velocity": -0.08,
+      "expected": 0.0669, "tolerance": 0.010
+    },
+    {
+      "name": "Hub_Cover_Small_to_Casing_Base",
+      "canonical_steps": ["inst_006_combine_hub_cover_small_base_01", "inst_007_combine_hub_cover_small_base_02"],
+      "source": "Hub Cover Small", "target": "Casing Base",
+      "source_pos": [-0.07260, -0.10920, 0.22], "target_pos": [0.0, 0.0, 0.0],
+      "source_rot": [0.0, 90.0, 0.0], "axis": 2, "velocity": -0.08,
+      "expected": 0.0614, "tolerance": 0.010
+    },
+    {
+      "name": "M6_Hub_Bolt_to_Casing_Base",
+      "canonical_steps": [
+        "inst_008_combine_m6_hub_bolt_01_base", "inst_009_combine_m6_hub_bolt_02_base",
+        "inst_010_combine_m6_hub_bolt_03_base", "inst_011_combine_m6_hub_bolt_04_base",
+        "inst_012_combine_m6_hub_bolt_05_base", "inst_013_combine_m6_hub_bolt_06_base",
+        "inst_014_combine_m6_hub_bolt_07_base", "inst_015_combine_m6_hub_bolt_08_base",
+        "inst_016_combine_m6_hub_bolt_09_base", "inst_017_combine_m6_hub_bolt_10_base",
+        "inst_018_combine_m6_hub_bolt_11_base", "inst_019_combine_m6_hub_bolt_12_base"
+      ],
+      "source": "M6 Hub Bolt", "target": "Casing Base",
+      "source_pos": [0.08, 0.0, 0.11], "target_pos": [0.0, 0.0, 0.0],
+      "source_rot": [90.0, 0.0, 0.0], "axis": 2, "velocity": -0.02,
+      "expected": 0.0428, "tolerance": 0.006
+    },
+    {
+      "name": "M10_Casing_Nut_to_M10_Casing_Bolt",
+      "canonical_steps": [
+        "inst_063_combine_m10_casing_nut_01", "inst_064_combine_m10_casing_nut_02",
+        "inst_065_combine_m10_casing_nut_03", "inst_066_combine_m10_casing_nut_04",
+        "inst_067_combine_m10_casing_nut_05", "inst_068_combine_m10_casing_nut_06"
+      ],
+      "source": "M10 Casing Nut", "target": "M10 Casing Bolt",
+      "source_pos": [0.0, 0.0, -0.30], "target_pos": [0.0, 0.0, 0.0],
+      "source_rot": [90.0, 0.0, 90.0], "target_rot": [90.0, 0.0, 0.0],
+      "axis": 2, "velocity": 0.08,
+      "expected": -0.1167, "tolerance": 0.012
+    }
+  ]
+}

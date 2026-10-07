@@ -1,0 +1,76 @@
+experiment:
+  name: vader_hub_cover_output_top_to_casing_top
+  backend: isaac_inprocess
+  feedback_mode: public_contact
+  record_video: true
+
+scene:
+  stage_path: assets/parts
+  robot_prim: /World/envs/env_0/Robot
+  cover_prim: /World/envs/env_0/Hub_Cover_Output_Top
+  hub_prim: /World/envs/env_0/Casing_Top
+  registered_goal_frame: socket_hub_output
+  initial_layout: scatter
+  start_stage: scattered
+  table_size_xy: [2.72, 1.8]
+  table_top_z: 0.834
+  table_center_xy: [1.52, 0.0]
+  scatter_support_top_z: 0.934
+  scatter_physical_supports: true
+  scatter_spawn_margin_m: 0.002
+  casing_initial_xy: [0.55, 0.0]
+  cover_initial_xy: [0.95, 0.55]
+  meters_per_unit: 1.0
+  up_axis: Z
+  physics_dt_s: 0.01
+
+cameras:
+  - alias: head_rgb
+    prim_path: /World/envs/env_0/Robot/head_camera
+    enabled: true
+  - alias: left_hand_rgb
+    prim_path: /World/envs/env_0/Robot/left_hand_camera
+    enabled: true
+  - alias: right_hand_rgb
+    prim_path: /World/envs/env_0/Robot/right_hand_camera
+    enabled: true
+
+robot:
+  controller_backend: existing Isaac persistent-worker full-physics pick/place skills
+  use_magic_combine: false
+  allow_part_pose_writes_during_episode: false
+
+models:
+  endpoint: http://127.0.0.1:18081/v1/chat/completions
+  lmp: Qwen/Qwen3-VL-2B-Instruct
+  vlm: Qwen/Qwen3-VL-2B-Instruct
+  api_key_env: VADER_API_KEY
+  timeout_s: 90
+
+controller:
+  grip_opening_m: 0.005
+  release_opening_m: 0.05
+  gripper_static_friction: 10.0
+  gripper_dynamic_friction: 8.0
+  transport_clearance_z_m: 0.20
+  insert_safe_waypoint: true
+  follow_link_orientation: false
+  rotate_held_orientation: false
+  preplace_release_clearance_y_m: 0.0
+  m0_freeze_release_joints: true
+  m0_retract_segments: 10
+  m0_retract_segment_steps: 20
+  m0_retract_step_z_m: 0.02
+  camera_update_stride: 20
+  render_interval: 20
+  staging_support_drop_m: 0.05
+  staging_support_retract_steps: 1
+  staging_support_withdraw_mode: down
+
+helper:
+  post_intervention_settle_s: 0.5
+  require_safe_robot_state_before_start: true
+
+budgets:
+  episode_wall_timeout_s: 1800
+  max_plan_steps: 8

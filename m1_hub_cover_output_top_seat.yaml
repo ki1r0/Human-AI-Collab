@@ -1,0 +1,44 @@
+task_id: m1_hub_cover_output_top_seat
+interface_id: Hub_Cover_Output_to_Casing_Top
+canonical_instance: inst_025_combine_hub_cover_output_top
+sequence_step: step_14_hub_cover_output_top
+source_part: Hub_Cover_Output_Top
+target_part: Casing_Top
+source_asset: assets/parts/Hub Cover Output.usd
+target_asset: assets/parts/Casing Top.usd
+source_frame: plug_main
+target_frame: socket_hub_output
+backend: roco
+asset_scale: 0.002
+physics:
+  # Collision-on reset-only probe is provisional; robot-held calibration is pending.
+  calibration_status: pending
+  # Defaults reproduce the latest composed-stage SDF-margin=0 regression.
+  # The older isolated -0.08 m/s / 960-step trial remains in the manifest.
+  velocity_mps: -0.008
+  steps: 1930
+  # Canonical MagicAssembly child-local override: (0, 43.41859, 31.0)
+  # authored units at scale 0.002. The un-overridden plug/socket fit
+  # (0, 0.0795, 0.07719718) remains calibration evidence, not an episode pose.
+  axial_depth_m: 0.062
+  axial_tolerance_m: 0.008
+  radial_tolerance_m: 0.004
+  tilt_tolerance_deg: 2.0
+  max_penetration_m: 0.001
+  settle_speed_mps: 0.01
+  settle_window_s: 0.5
+  contact_offset_m: 0.0001
+  rest_offset_m: -0.00005
+reset:
+  casing_pose_m: [0.55, 0.0, 1.0]
+  hub_pose_m: [0.30, 0.45, 1.08]
+  hub_rotation_wxyz: [0.0, 0.0, 0.7071067812, 0.7071067812]
+  fault_profiles:
+    nominal: {offset_m: [0.0, 0.0, 0.0], tilt_deg: 0.0}
+    fault_hil: {offset_m: [0.0, 0.0, 0.003], tilt_deg: 2.5}
+    fault_no_help: {offset_m: [0.0, 0.0, 0.003], tilt_deg: 2.5}
+allowed_skills: [pick, preinsert, insert, verify, release_retract]
+public_sensors: [head_rgb, left_hand_rgb, right_hand_rgb, qpos, qvel, gripper, grasp_verification]
+seeds:
+  nominal: 1201
+  fault: 1202

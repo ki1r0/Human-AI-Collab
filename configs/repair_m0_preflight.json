@@ -1,0 +1,32 @@
+{
+  "status": "PASS",
+  "config": "/home/sunsiliang/Human-AI-Collab/configs/repair_m0_scattered_pure.yaml",
+  "repo_root": "/home/sunsiliang/Human-AI-Collab",
+  "errors": [],
+  "warnings": [],
+  "bindings": {
+    "robot_prim": "/World/envs/env_0/Robot",
+    "cover_prim": "/World/envs/env_0/Hub_Cover_Output_Top",
+    "hub_prim": "/World/envs/env_0/Casing_Top",
+    "goal_frame": "socket_hub_output",
+    "cameras": [
+      {
+        "alias": "head_rgb",
+        "prim_path": "/World/envs/env_0/Robot/head_camera",
+        "enabled": true
+      },
+      {
+        "alias": "left_hand_rgb",
+        "prim_path": "/World/envs/env_0/Robot/left_hand_camera",
+        "enabled": true
+      },
+      {
+        "alias": "right_hand_rgb",
+        "prim_path": "/World/envs/env_0/Robot/right_hand_camera",
+        "enabled": true
+      }
+    ],
+    "physics_dt_s": 0.01,
+    "meters_per_unit": 1.0
+  }
+}
