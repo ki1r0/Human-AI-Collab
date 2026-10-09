@@ -1,0 +1,66 @@
+# Release-state sensor calibration candidate. Does not certify seating or bolts.
+task_id: hub_cover_output_top_to_casing_top
+assets:
+  cover: assets/parts/Hub Cover Output.usd
+  casing: assets/parts/Casing Top.usd
+  source_meters_per_unit: 0.01
+  source_up_axis: Y
+  spawn_scale: 0.002
+  note: Spawn scale follows existing scene; do not multiply units again without auditing geometry.
+scene:
+  robot_prim: /World/envs/env_0/Robot
+  cover_prim: /World/envs/env_0/Hub_Cover_Output_Top
+  casing_prim: /World/envs/env_0/Casing_Top
+  physics_dt_s: 0.01
+  decimation: 1
+  table_top_z_m: 0.834
+  table_center_xy: [1.75, 0.0]
+  support_top_z_m: 0.934
+  cover_initial_xy: [0.95, 0.55]
+  casing_initial_xy: [0.55, 0.0]
+  cover_gravity_enabled: true
+  casing_kinematic_fixture: true
+frames:
+  certified: true
+  socket: /World/socket_hub_output
+  plug: /World/plug_main
+  socket_authored_position: [0.0, 39.75, 27.9]
+  plug_authored_position: [0.0, 0.0, -3.66859]
+  socket_axis_local: [0.0, 0.0, 1.0]
+  socket_axis_world: [0.0, 0.0, 1.0]
+  plug_axis_local: [0.0, 1.0, 0.0]
+  seated_relative_position_m: [0.0, 0.08755134, 0.062]
+  seated_relative_quat_wxyz: [0.0, 0.0, 0.7071067812, 0.7071067812]
+  registration_symmetry_quats: null
+  robot_tool_offset_m: [0.0079, 0.0, 0.09089]
+  note: Frames are provisional; physical seating and bolt registration remain uncertified.
+sensors:
+  camera_aliases: [head_rgb, left_hand_rgb, right_hand_rgb]
+  contact_type: filtered_contact_scalar_N_not_axial_FT
+  holding_pair_force_threshold_N: null
+  holding_estimate_certified: false
+  released_opening_threshold_m: 0.045
+  public_pose_estimator: null
+online_check:
+  window_s: null
+  min_progress_mm: null
+  contact_threshold_N: null
+  target_tolerance_mm: null
+  timeout_s: null
+evaluation:
+  certified: false
+  registration_certified: false
+  axial_tolerance_m: 0.008
+  radial_tolerance_m: 0.004
+  tilt_tolerance_deg: 2.0
+  max_penetration_m: 0.001
+  settle_speed_mps: 0.01
+  settle_window_s: 0.5
+  registration_tolerance_deg: null
+  note: Provisional; only the finger-open release signal has a candidate threshold.
+profiles:
+  pick_nominal: {certified: false, waypoints: []}
+  seat_nominal: {certified: false, waypoints: []}
+  xy_small: {certified: false, unload_first: true, changed_factor: xy, waypoints: []}
+  angle_small: {certified: false, unload_first: true, changed_factor: angle, waypoints: []}
+  speed_low: {certified: false, changed_factor: speed, waypoints: []}

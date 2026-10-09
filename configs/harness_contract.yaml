@@ -1,0 +1,30 @@
+backend: contract_only
+help_mode: request_only
+freshness_s: 5
+model_timeout_s: 2
+resume_duration_s: 0.1
+max_decisions: 12
+candidate_probe_limit: 3
+primary_endpoint: seat_gt
+budget: {contacts: 4, probes: 2, inspections: 2, helps: 1, wall_s: 30}
+# These numbers belong ONLY to the test double, not the robot.
+safety: {tracking_limit_m: 0.01}
+helper:
+  target: socket_hub_output
+  operation: clear_target_area
+  allowed_scope: target_area_only
+  desired_postconditions: [usable_grasp_and_approach]
+model: null
+estimator_path: null
+cost_weights: {wall_s: 0.01, contact_exposure_Ns: 0, helper_effort: 0.1, model_money: 1}
+tools:
+  - {candidate_id: pick, tool: pick_and_prealign, profile: test_pick, certified: true, resources: {duration_s: 0.1}}
+  - {candidate_id: seat, tool: seat_once, profile: test_seat, certified: true, requires_holding: true, resources: {contacts: 1, duration_s: 0.1}}
+  - {candidate_id: xy, tool: probe_xy, profile: test_xy, certified: true, requires_holding: true, resources: {contacts: 1, probes: 1, duration_s: 0.1}}
+  - {candidate_id: angle, tool: probe_angle, profile: test_angle, certified: true, requires_holding: true, resources: {contacts: 1, probes: 1, duration_s: 0.1}}
+  - {candidate_id: speed, tool: probe_speed, profile: test_speed, certified: true, requires_holding: true, resources: {contacts: 1, probes: 1, duration_s: 0.1}}
+  - {candidate_id: inspect, tool: inspect, certified: true, verification: true, resources: {inspections: 1, duration_s: 0.1}}
+  - {candidate_id: observe, tool: observe, certified: true}
+  - {candidate_id: help, tool: ask_act, certified: true, resources: {helps: 1, duration_s: 0.1}}
+  - {candidate_id: stop, tool: stop, certified: true}
+  - {candidate_id: finish, tool: finish, certified: true}

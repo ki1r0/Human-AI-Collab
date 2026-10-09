@@ -65,4 +65,7 @@ pilot_12pair/outputs/
 # evaluator-only labels in version control).
 runs/
 **/evaluator_private.jsonl
+**/private_gt.jsonl
+**/*_private_gt.jsonl
+**/calibration_record.json
 **/episode.mp4

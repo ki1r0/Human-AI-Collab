@@ -1297,3 +1297,166 @@ seen in D39-D42. Keep the accepted collision and release checks unchanged. The
 next experiment should return to the load-bearing `radial` grasp and adjust the
 arm path/clearance at the casing, rather than further changing grasp angle or
 masking collisions.
+
+### D44 protocol: RoCo-scale tabletop and measured radial pinch
+
+Hypothesis: the previous strict scene makes the work surface visually and
+physically inconsistent with the task: a `1.5 x 1.2 m` box is placed at
+`z=-0.05 m`, while independent staging supports hold the parts around `z=1 m`.
+Use a `3.0 x 2.0 m` tabletop with its top at `z=0.934 m`, scatter-reset the
+dynamic Hub and Casing onto that collision surface, and remove elevated staging
+supports. Start the Hub at `(0.30, 0.43)` so its CAD footprint is separated
+from the Casing and fully inside the table bounds. Revert to the known-valid
+`radial` pinch (`0.085 m` pair offset); D39 contact telemetry measured inner
+and outer radii at approximately `0.058 m` and `0.123 m`, whereas D43's
+`radial_y90` missed both walls. Keep the controller, full gravity, strict
+scoring, all nominal robot-fixture collisions, and release guard unchanged.
+
+Prediction: reset geometry reports both CAD bottoms within the existing `2 mm`
+spawn margin of the large tabletop; bilateral tip telemetry again reports one
+inner-wall and one outer-wall contact; Hub follows both arms during lift and
+transport. This tests the requested scene/grasp corrections, not a scoring
+threshold change. The run is `validation_logs/m1_gt_roco_table_radial_contact_20261007/`.
+
+### D44 result: table is fixed; Hub is ejected before a bilateral pinch
+
+D44 completed with a valid 2,683-frame video and no encoder error. The new
+`3.0 x 2.0 m` tabletop at `z=0.934 m` is supporting both dynamic CAD parts
+directly: their measured reset bottoms are `2 mm` above the surface and both
+footprints are within the table bounds. This removes the previous raised-pad /
+low-table mismatch.
+
+The requested radial contact did not pass in this source location. With the Hub
+at `(0.30, 0.43)`, the left approach already tips and displaces it before the
+second arm closes; the Hub root moves from `(0.30, 0.43, 0.948)` to about
+`(0.356, 0.467, 1.013)` during the first insertion approach, with high angular
+velocity. At closure only a left inner-wall contact is classified; the outer
+wall and right-arm contacts are absent. A reported `7.49 kN` peak is therefore
+a collision impulse, not evidence of a grasp. The physical score is **1/4**
+and RoCo-style score **2/6**; insertion is unverified and the release guard
+correctly keeps the grippers closed.
+
+### D45 protocol: separate the parts in X; retain the validated radial pinch
+
+The evidence isolates the remaining immediate cause: the `(0.30, 0.43)` source
+pose requires the left arm to reach diagonally across the table and destabilizes
+the unsupported Hub before the mirrored jaw pair is established. D45 moves the
+Hub to `(0.15, 0.0)`, leaving its full CAD footprint on a slightly wider
+`3.2 x 2.0 m` tabletop and creating a `50 mm` X gap from the Casing footprint.
+The Hub returns to the centerline used by the prior successful radial contact
+test. The gripper orientation, `85 mm` radial pair offset, controller, horizon,
+full gravity, collision pairs, scoring thresholds, and release guard are
+unchanged. Prediction: no reset overlap/ejection; both inner and outer wall
+contacts are present before lift. Run output:
+`validation_logs/m1_gt_roco_table_radial_contact_x015_20261007/`.
+
+### D45 result: direct tabletop reset still destabilizes the grasp
+
+D45 completed with a valid 2,683-frame video. The `3.2 x 2.0 m` tabletop
+contains both parts, and their reset bottoms are each `2 mm` above the surface.
+However, during the left then right approach the Hub is displaced and rotated;
+at the right approach its speed reaches `0.20 m/s`, and at closure the Hub is
+moving at `1.03 m/s`. Only one transient right-link contact is reported
+(`780.62 N`); no sample verifies one-inner/one-outer contact. The final Hub is
+still at the source `(0.150, 0.000, 0.948)`, about `422 mm` radially from the
+seat, so the strict score is **2/6** and release is correctly skipped.
+
+The trace shows the remaining cause: moving the Hub onto the `z=0.934 m`
+tabletop makes the existing high-to-low radial approach traverse the annulus
+from too far above and destabilize the part. It is not a table-size failure.
+Next preserve the enlarged tabletop and direct Casing support, but use the
+existing physical Hub staging pads to present the Hub at its previously
+validated grasp height (`z≈1.08 m`). This keeps the object dynamic and
+gravity-supported while separating the approach-height effect from the table
+change. D46 output: `validation_logs/m1_gt_roco_table_staged_radial_20261008/`.
+
+### D46 protocol: raised physical cradle, known-valid radial contact
+
+Use the `3.2 x 2.0 m` tabletop at `z=0.934 m`; keep the Casing directly
+supported at `z=0.935 m`; support the dynamic Hub on the existing four kinematic
+staging pads with their top at `z=1.066 m`. The CAD-derived Hub root therefore
+remains about `1.08 m`, matching the prior radial grasp evidence while a real
+support reaction remains enabled. Place Hub at `(0.30, 0.0)` and Casing at
+`(0.55, 0.0)`, restore the measured `radial` tool pose and `0.085 m` offset,
+and retain all nominal robot-fixture collisions, full gravity, the 60 s horizon,
+strict scoring, and the seated-only release guard. Prediction: the two-arm
+contact topology and held-follow test recover; the remaining question is
+whether the existing dual-arm seat path can reach Hub-Casing contact without
+the arm-casing interference diagnosed in D39-D42.
+
+### D46 result: the raised Hub and Casing are too close for a clean grasp
+
+D46 completed with a valid 2,683-frame video and no encoder error. The large
+`3.2 x 2.0 m` table and reset support checks pass: the Casing is supported
+`2 mm` above the tabletop, and the Hub is supported `2 mm` above its physical
+staging pads. However, the Hub was placed at `(0.30, 0.0)` while the Casing was
+at `(0.55, 0.0)`. Their projected X bounds overlap (`Hub 0.17–0.43 m`,
+`Casing 0.33–0.77 m`), leaving only `19 mm` of vertical clearance between the
+Hub's predicted bottom and the Casing's top. During closure the Hub is pushed
+to `(0.446, 0.008, 1.063)` and then `(0.649, -0.079, 1.063)`; the trace shows
+roughly `56 N` Hub-Casing force, while every gripper-to-Hub fingertip force is
+zero and no inner/outer wall contact is classified. Score is **2/6** (the
+strict grasp and transport criteria fail); no insertion is verified and the
+release guard correctly keeps both grippers closed. Thus the enlarged table
+and raised physical support do not by themselves fix the approach: the staged
+Hub is too close to the Casing/arm path.
+
+### D47 protocol: keep the validated height, move the Hub clear of the Casing
+
+Keep the same enlarged table, four physical Hub pads, direct Casing support,
+radial orientation, `85 mm` radial pair offset, controller, strict score,
+nominal collision pairs, and release guard. Change only the Hub reset X from
+`0.30 m` to `0.15 m`, retaining its supported grasp height near `1.08 m` and
+the Casing at `0.55 m`. This leaves an estimated `50 mm` gap between the
+Hub/Casing horizontal footprints while preserving the previously measured
+inner/outer-wall pinch geometry. Run output:
+`validation_logs/m1_gt_roco_table_staged_radial_x015_20261008/`.
+
+### D47 result: x=0.15 m is unstable before grasp
+
+D47 completed with a valid 2,683-frame video and no encoder error. Reset
+geometry is inside the enlarged tabletop, with the Hub bottom `2 mm` above its
+four physical supports and the Casing bottom `2 mm` above its support. But
+after only 50 gravity-settle steps, before either jaw closes, the Hub has moved
+from `(0.15, 0, 1.082)` to `(1.148, -0.402, 0.948)`—a `1.084 m` displacement.
+No fingertip force/contact or Hub-Casing force is recorded. The dynamic body is
+already off its support at the `gravity_reset_settle` checkpoint, so later arm
+motion cannot grasp it; score is **1/6**, with verdict
+`COLLISION_EJECTION_OR_APPROACH_DRIFT`. The current telemetry does not identify
+which robot/support collision caused the initial ejection; moving the Hub
+toward the robot-side table edge is rejected.
+
+### D48 protocol: move the source away in Y while retaining safe X
+
+Retain Hub `x=0.30 m`, the `z≈1.08 m` physical-pad presentation, casing
+`(0.55, 0.0)`, large table, radial tool orientation, `85 mm` pinch offset,
+controller, collisions, score, and release guard. Change only Hub `y` to
+`0.43 m`, separating the two parts laterally without moving the Hub closer to
+the robot's X-side boundary. The low direct-table D44 attempt at this Y was
+destabilized by a longer high-to-low approach; this run restores the validated
+raised grasp height to isolate that factor. Run output:
+`validation_logs/m1_gt_roco_table_staged_radial_y043_20261008/`.
+
+### D48 result: lateral source placement is outside the right arm's reach
+
+D48 completed with a valid 2,683-frame video and no encoder error. The Hub
+remains stable on the physical cradle through both approach checkpoints, but
+the right gripper does not reach it: immediately before closure, the left jaw
+links are around `y=0.46–0.58 m` while the right jaw links remain around
+`y=-0.08–0.01 m`, versus the Hub center at `y=0.43 m`. No fingertip contact is
+classified. Closure pushes the Hub `140 mm` in X and it drops `134 mm` onto the
+table; no load-bearing grasp follows. Score is **1/6**, insertion is unverified,
+and release remains guarded. This rules out moving the source laterally as a
+dual-arm clearance fix.
+
+### D49 protocol: preserve the reachable grasp; move the Casing along X
+
+Return the Hub to the validated radial-grasp pose `(0.30, 0.0)` at the same
+physical support height. Move only the Casing from `x=0.55 m` to `x=0.75 m`
+(keep `y=0` and its table support). This opens an estimated `100 mm` gap
+between their CAD X bounds while retaining the source position previously
+shown to admit bilateral inner/outer-wall contact. Keep the controller,
+transport, collisions, scoring, and guarded release unchanged. This tests
+whether a longer but collision-free X transfer lets the grasp survive and
+allows seating on the enlarged table. Run output:
+`validation_logs/m1_gt_roco_table_staged_radial_casing_x075_20261008/`.

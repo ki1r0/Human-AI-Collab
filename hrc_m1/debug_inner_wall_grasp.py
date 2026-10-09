@@ -37,13 +37,13 @@ parser.add_argument("--scatter-reset", action="store_true",
                     help=("Start with the Hub Cover and Casing separated on the enlarged table. "
                           "Both CAD bodies are dynamic with gravity enabled from reset; "
                           "their Z positions are derived from the authored USD bounds."))
-parser.add_argument("--table-size-x", type=float, default=1.8,
+parser.add_argument("--table-size-x", type=float, default=3.2,
                     help="Table collision size in X for the scatter reset (metres).")
-parser.add_argument("--table-size-y", type=float, default=1.8,
+parser.add_argument("--table-size-y", type=float, default=2.0,
                     help="Table collision size in Y for the scatter reset (metres).")
 parser.add_argument("--table-top-z", type=float, default=0.934,
                     help="Table top world Z for the scatter reset (metres).")
-parser.add_argument("--table-center-x", type=float, default=1.20,
+parser.add_argument("--table-center-x", type=float, default=1.60,
                     help="Table center X for the scatter reset (metres).")
 parser.add_argument("--table-center-y", type=float, default=0.0,
                     help="Table center Y for the scatter reset (metres).")

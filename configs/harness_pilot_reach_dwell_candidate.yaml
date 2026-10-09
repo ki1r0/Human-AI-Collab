@@ -1,0 +1,47 @@
+# Reach-only ablation: same reset and motion limits as release_candidate;
+# extend each waypoint's held-setpoint dwell to test controller convergence.
+task_config: configs/task_hub_cover.yaml
+dual_arm_tcp_offset_m: [0.0, -0.18, 0.0]
+scene:
+  fixed_bundle_torso_posture: false
+  cover_initial_xy: [0.27, -0.17]
+  casing_initial_xy: [0.50, 0.13683718]
+  casing_initial_quat_wxyz: [0.0, 0.0, 0.0, 1.0]
+  cover_initial_quat_wxyz: [-0.7071067812, -0.7071067812, 0.0, 0.0]
+  cover_support_top_z_m: 1.066
+  robot_contact_offset_m: 0.0001
+  cover_support_xy_offsets_m: {n: [-0.10, 0.06]}
+safety:
+  hold_certified: false
+  workspace_xyz_m: [[0.05, 0.95], [-0.75, 0.75], [0.85, 1.75]]
+  tcp_speed_limit_mps: 0.15
+  joint_speed_limit_radps: 2.0
+  force_limit_N: 120.0
+  tracking_limit_m: 0.08
+  finger_force_limit_N: 180.0
+wall_limit_s: 1200
+nominal_source_root_z_m: 1.0820590525
+nominal_casing_root_z_m: 0.9918966522
+grasp_link6_x_offset_m: 0.0
+grasp_pair_offset_m: 0.095
+grasp_link6_z_offset_m: 0.085
+grasp_quat_wxyz: [0.0, 0.0, 1.0, 0.0]
+entry_offset_m: [0.0, 0.0, 0.0]
+approach_opening_m: 0.050
+approach_clearance_m: 0.075
+grasp_opening_m: 0.020
+translation_speed_mps: 0.03
+transfer_speed_mps: 0.015
+preinsert_speed_mps: 0.005
+lift_speed_mps: 0.01
+settle_s: 5.0
+lift_m: 0.08
+transport_tcp_z_m: 1.16
+preinsert_clearance_m: 0.05
+insert_speed_mps: 0.002
+pair_contact_probe_N: 1.0
+pair_loss_window_s: 0.2
+seat_contact_min_N: 1.0
+release_opening_m: 0.05
+release_dwell_s: 1.0
+retract_clearance_m: 0.08

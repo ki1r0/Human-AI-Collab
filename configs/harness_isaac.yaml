@@ -1,0 +1,42 @@
+backend: isaac
+help_mode: request_only
+task_config: configs/task_hub_cover.yaml
+primary_endpoint: seat_gt
+freshness_s: 2
+model_timeout_s: 90
+resume_duration_s: 30
+max_decisions: 12
+startup_observe_ticks: 60
+candidate_probe_limit: 3
+budget: {contacts: 4, probes: 2, inspections: 2, helps: 1, wall_s: 1800}
+safety:
+  hold_certified: false
+  handover_joint_speed_radps: null
+  workspace_xyz_m: null
+  tcp_speed_limit_mps: null
+  joint_speed_limit_radps: null
+  force_limit_N: null
+  tracking_limit_m: null
+  observation_freshness_s: 2
+helper:
+  target: socket_hub_output
+  operation: assist_with_assembly
+  allowed_scope: target_area_only
+  desired_postconditions: [usable_grasp_and_approach]
+model:
+  endpoint: http://127.0.0.1:18082/v1/chat/completions
+  model: Qwen/Qwen3-VL-2B-Instruct
+  api_key_env: HRC_MODEL_API_KEY
+  timeout_s: 90
+estimator_path: null
+cost_weights: {wall_s: 0.01, contact_exposure_Ns: 0, helper_effort: 0.1, model_money: 1}
+tools:
+  - {candidate_id: pick, tool: pick_and_prealign, profile: pick_nominal, certified: false, resources: {duration_s: 60}}
+  - {candidate_id: seat, tool: seat_once, profile: seat_nominal, certified: false, requires_holding: true, resources: {contacts: 1, duration_s: 30}}
+  - {candidate_id: xy, tool: probe_xy, profile: xy_small, certified: false, requires_holding: true, resources: {contacts: 1, probes: 1, duration_s: 30}}
+  - {candidate_id: angle, tool: probe_angle, profile: angle_small, certified: false, requires_holding: true, resources: {contacts: 1, probes: 1, duration_s: 30}}
+  - {candidate_id: speed, tool: probe_speed, profile: speed_low, certified: false, requires_holding: true, resources: {contacts: 1, probes: 1, duration_s: 30}}
+  - {candidate_id: inspect, tool: inspect, certified: true, verification: true, resources: {inspections: 1, duration_s: 5}}
+  - {candidate_id: help, tool: ask_act, certified: true, resources: {helps: 1, duration_s: 5}}
+  - {candidate_id: stop, tool: stop, certified: true}
+  - {candidate_id: finish, tool: finish, certified: true}

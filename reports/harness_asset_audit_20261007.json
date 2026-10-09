@@ -1,0 +1,376 @@
+{
+  "assets": [
+    {
+      "path": "assets/parts/Hub Cover Output.usd",
+      "meters_per_unit": 0.01,
+      "up_axis": "Y",
+      "default_prim": "/World",
+      "rigid_bodies": [
+        "/World"
+      ],
+      "frames": [
+        {
+          "path": "/World/plug_main",
+          "type": "Xform",
+          "local_transform": [
+            [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              -3.66859,
+              1.0
+            ]
+          ]
+        }
+      ],
+      "meshes": [
+        {
+          "path": "/World/node_/mesh_",
+          "points": 31452,
+          "collision_enabled": true,
+          "approximation": "sdf"
+        }
+      ],
+      "hole_clearance_verified": false,
+      "physical_seating_verified": false
+    },
+    {
+      "path": "assets/parts/Casing Top.usd",
+      "meters_per_unit": 0.01,
+      "up_axis": "Y",
+      "default_prim": "/World",
+      "rigid_bodies": [
+        "/World"
+      ],
+      "frames": [
+        {
+          "path": "/World/socket_hub_output",
+          "type": "Xform",
+          "local_transform": [
+            [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              0.0,
+              39.75,
+              27.9,
+              1.0
+            ]
+          ]
+        },
+        {
+          "path": "/World/socket_hub_input",
+          "type": "Xform",
+          "local_transform": [
+            [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              31.0,
+              -49.69,
+              27.9,
+              1.0
+            ]
+          ]
+        },
+        {
+          "path": "/World/socket_hub_small",
+          "type": "Xform",
+          "local_transform": [
+            [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              -31.0,
+              -49.69,
+              27.9,
+              1.0
+            ]
+          ]
+        },
+        {
+          "path": "/World/socket_bolt_hub_1",
+          "type": "Xform",
+          "local_transform": [
+            [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              40.0,
+              0.0,
+              27.9,
+              1.0
+            ]
+          ]
+        },
+        {
+          "path": "/World/socket_bolt_hub_2",
+          "type": "Xform",
+          "local_transform": [
+            [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              -40.0,
+              0.0,
+              27.9,
+              1.0
+            ]
+          ]
+        },
+        {
+          "path": "/World/socket_bolt_hub_3",
+          "type": "Xform",
+          "local_transform": [
+            [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              40.0,
+              80.0,
+              27.9,
+              1.0
+            ]
+          ]
+        },
+        {
+          "path": "/World/socket_bolt_hub_4",
+          "type": "Xform",
+          "local_transform": [
+            [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              -40.0,
+              80.0,
+              27.9,
+              1.0
+            ]
+          ]
+        },
+        {
+          "path": "/World/socket_bolt_hub_5",
+          "type": "Xform",
+          "local_transform": [
+            [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              54.0,
+              -27.0,
+              27.9,
+              1.0
+            ]
+          ]
+        },
+        {
+          "path": "/World/socket_bolt_hub_6",
+          "type": "Xform",
+          "local_transform": [
+            [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              -54.0,
+              -27.0,
+              27.9,
+              1.0
+            ]
+          ]
+        },
+        {
+          "path": "/World/plug_casing_mate",
+          "type": "Xform",
+          "local_transform": [
+            [
+              1.0,
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              -27.9,
+              1.0
+            ]
+          ]
+        }
+      ],
+      "meshes": [
+        {
+          "path": "/World/node_/mesh_",
+          "points": 349380,
+          "collision_enabled": true,
+          "approximation": "sdf"
+        }
+      ],
+      "hole_clearance_verified": false,
+      "physical_seating_verified": false
+    }
+  ]
+}

@@ -102,30 +102,23 @@ def make_env_classes() -> tuple[type, type]:
         # surface and the desired XY layout.
         casing_reset_pos = (0.55, 0.0, 1.0)
         scatter_reset = False
-        table_top_z = -0.05
+        table_top_z = 0.934
         scatter_spawn_margin_m = 0.002
-        table_size_xy = (1.5, 1.2)
-        table_center_xy = (0.55, 0.0)
-        scatter_support_top_z = -0.05
-        scatter_hub_support_top_z = -0.05
-        # A simple kinematic cuboid is sufficient as the M1 support fixture and
-        # avoids importing RoCo's detailed desk mesh/collision cooking into the
-        # seating measurement.
+        table_size_xy = (3.2, 2.0)
+        table_center_xy = (1.60, 0.0)
+        scatter_support_top_z = 0.934
+        scatter_hub_support_top_z = 0.934
+        # Use a RoCo-scale work surface under the actual task workspace. The
+        # tabletop spans x=[0.05, 3.05] m, stays clear of the torso in Z, and
+        # supports the dynamic parts directly in the scatter reset.
         table_cfg = RigidObjectCfg(
             prim_path="/World/envs/env_.*/Table",
             spawn=sim_utils.CuboidCfg(
-                size=(1.5, 1.2, 0.10),
+                size=(3.2, 2.0, 0.10),
                 rigid_props=sim_utils.RigidBodyPropertiesCfg(disable_gravity=True, kinematic_enabled=True),
                 collision_props=sim_utils.CollisionPropertiesCfg(contact_offset=0.0001, rest_offset=0.0),
             ),
-            # The R1 base is authored with its bottom at z=0 and torso_link1
-            # spanning z≈0.238..0.763 m.  A top surface at z=0.35 therefore
-            # penetrates the base and torso at reset; the earlier comment
-            # claiming that it sat below the torso was incorrect.  Keep the
-            # table as a floor/support collision, but place its top at z=-0.05
-            # so it cannot overlap the fixed robot base.  The calibrated
-            # Casing remains a separate fixture at z=1.0.
-            init_state=RigidObjectCfg.InitialStateCfg(pos=(0.55, 0.0, -0.10), rot=(1.0, 0.0, 0.0, 0.0)),
+            init_state=RigidObjectCfg.InitialStateCfg(pos=(1.60, 0.0, 0.884), rot=(1.0, 0.0, 0.0, 0.0)),
         )
         # The strict physics rollout uses explicit kinematic support fixtures
         # rather than starting either CAD part in mid-air.  The four narrow

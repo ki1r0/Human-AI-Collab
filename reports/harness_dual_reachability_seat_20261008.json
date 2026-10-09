@@ -1,0 +1,48 @@
+{
+  "role": "offline_kinematics_not_physics",
+  "reference": "runs/harness/pilot_dual_ad_20261008",
+  "fk_telemetry_error_m": 2.9541884056088894e-06,
+  "wrist_z_m": 1.1388966522,
+  "wrist_quat_wxyz": [
+    0.0,
+    0.0,
+    1.0,
+    0.0
+  ],
+  "pair_offset_m": 0.09,
+  "results": [
+    {
+      "grasp_center_xy_m": [
+        0.5,
+        0.055
+      ],
+      "arms": {
+        "left": {
+          "position_error_m": 6.612292119269266e-12,
+          "orientation_error_deg": 2.9381870831328113e-09,
+          "joint_positions_rad": [
+            0.1897547059877043,
+            2.820774241379554,
+            -1.8134847762104873,
+            0.15318564397849974,
+            1.469778806153378,
+            2.1339257629470527
+          ]
+        },
+        "right": {
+          "position_error_m": 1.0376917167216816e-12,
+          "orientation_error_deg": 4.5166808209040016e-10,
+          "joint_positions_rad": [
+            -0.18981127422354374,
+            3.1042593674840298,
+            -2.0370681834068645,
+            -0.17449567468769683,
+            -1.479617358368667,
+            -2.0667621404540237
+          ]
+        }
+      },
+      "reachable": true
+    }
+  ]
+}
