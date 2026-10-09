@@ -1,0 +1,120 @@
+{
+  "scope": "static source meshes posed in authored casing frame; no threading, simulation, or robot motion",
+  "assembly_source": "runtime/ui.py::combine_casing_top + runtime/magic_assembly.py child overrides",
+  "task_scale": {
+    "simple_room_meters_per_unit": 1.0,
+    "bolt_instance_basis": [
+      0.0020000000949949026,
+      0.0020000000949949026,
+      0.0020000000949949026
+    ],
+    "casing_instance_basis": [
+      0.0020000000949949026,
+      0.0020000000949949026,
+      0.0020000000949949026
+    ],
+    "source_unit_to_scene_m": 0.0020000000949949026,
+    "bolt_scene_shank_diameter_mm_from_source_profile": 11.767996864261015
+  },
+  "candidate": {
+    "bolt": "M6_Hub_Bolt_01_top",
+    "cover": "Hub_Cover_Output",
+    "socket": "socket_bolt_hub_1",
+    "socket_source_xyz": [
+      40.0,
+      0.0,
+      27.9
+    ],
+    "cover_pose_source": {
+      "translation": [
+        0.0,
+        43.41859,
+        31.0
+      ],
+      "rotation_xyz_deg": [
+        -90,
+        180,
+        0
+      ]
+    },
+    "bolt_pose_source_override_z": 29.2
+  },
+  "bolt_profile_source_units": {
+    "axis_y_bounds_source_units": [
+      -13.07499885559082,
+      13.07499885559082
+    ],
+    "shaft_y_interval_source_units": [
+      -13.07499885559082,
+      8.92500114440918
+    ],
+    "shaft_radius_p95_source_units": 2.9420005790802293,
+    "shaft_diameter_p95_source_units": 5.8840011581604585,
+    "shaft_diameter_median_source_units": 5.883998152655591,
+    "cap_bottom_y_source_units_estimate": 8.92500114440918,
+    "cap_outer_radius_source_units": 5.773503303527832
+  },
+  "whole_shank_surface_clearance": {
+    "cover": {
+      "status": "CLEAR_CONSERVATIVE",
+      "shaft_radius_source_units": 2.9420005790802293,
+      "min_projected_surface_radius_source_units": 3.6479270507992583,
+      "margin_mm": 1.411852943438058,
+      "candidate_triangles_exactly_clipped": 0,
+      "axial_overlap_triangles": 10484
+    },
+    "casing": {
+      "status": "CLEAR_CONSERVATIVE",
+      "shaft_radius_source_units": 2.9420005790802293,
+      "min_projected_surface_radius_source_units": 3.1109647137472605,
+      "margin_mm": 0.3379282693340624,
+      "candidate_triangles_exactly_clipped": 0,
+      "axial_overlap_triangles": 66225
+    }
+  },
+  "cap_bearing_check": {
+    "status": "PARTIAL_OR_NO_BEARING",
+    "cap_bottom_y_source_units_estimate": 8.92500114440918,
+    "sampled_support_fraction": 0.6666666666666666,
+    "samples": 144,
+    "support_by_radius": [
+      {
+        "radius_source_units": 3.0620005790802294,
+        "support_fraction": 0.0,
+        "samples": 48
+      },
+      {
+        "radius_source_units": 4.357751941304031,
+        "support_fraction": 1.0,
+        "samples": 48
+      },
+      {
+        "radius_source_units": 5.653503303527832,
+        "support_fraction": 1.0,
+        "samples": 48
+      }
+    ],
+    "gap_mm_by_radius": [
+      null,
+      [
+        0.19094982147213102,
+        0.19094982147213813
+      ],
+      [
+        0.19094982147213102,
+        0.19094982147214168
+      ]
+    ],
+    "coplanar_cover_triangles_considered": 851,
+    "covered_surface_gap_mm_min_max": [
+      0.19094982147213102,
+      0.19094982147214168
+    ],
+    "note": "48 azimuths at 3 radii; gap conversion uses measured scene basis 0.002 and scene mpu 1"
+  },
+  "limits": [
+    "mesh-surface/cylinder test is conservative over the measured shaft interval",
+    "cover support is a sampled annulus at the current assembly override pose",
+    "does not establish grasp accessibility, contact dynamics, or full task success"
+  ]
+}

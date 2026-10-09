@@ -1,0 +1,669 @@
+{
+  "scope": "offline read-only USD inventory; no Kit, physics, or GPU simulation",
+  "assets": {
+    "Casing Top.usd": {
+      "path": "assets/parts/Casing Top.usd",
+      "stage_meters_per_unit": 0.01,
+      "up_axis": "Y",
+      "root_path": "/World",
+      "root_local_to_stage_matrix": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "root_xform": {
+        "order": [
+          "xformOp:translate",
+          "xformOp:rotateXYZ",
+          "xformOp:scale"
+        ],
+        "ops": [
+          {
+            "op": "xformOp:translate",
+            "type": "UsdGeom.XformOp.TypeTranslate",
+            "value": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "op": "xformOp:rotateXYZ",
+            "type": "UsdGeom.XformOp.TypeRotateXYZ",
+            "value": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "op": "xformOp:scale",
+            "type": "UsdGeom.XformOp.TypeScale",
+            "value": [
+              1.0,
+              1.0,
+              1.0
+            ]
+          }
+        ]
+      },
+      "root_local_mesh_bounds_units": [
+        [
+          -110.0185775756836,
+          110.0185775756836
+        ],
+        [
+          -138.63352966308594,
+          138.63352966308594
+        ],
+        [
+          -27.948326110839844,
+          27.948326110839844
+        ]
+      ],
+      "root_local_mesh_bounds_if_root_scale_ignored_m": [
+        [
+          -1.100185775756836,
+          1.100185775756836
+        ],
+        [
+          -1.3863352966308593,
+          1.3863352966308593
+        ],
+        [
+          -0.27948326110839844,
+          0.27948326110839844
+        ]
+      ],
+      "meshes": [
+        {
+          "path": "/World/node_/mesh_",
+          "point_count": 349380,
+          "triangle_count": 116460
+        }
+      ],
+      "triangle_count": 116460
+    },
+    "Hub Cover Output.usd": {
+      "path": "assets/parts/Hub Cover Output.usd",
+      "stage_meters_per_unit": 0.01,
+      "up_axis": "Y",
+      "root_path": "/World",
+      "root_local_to_stage_matrix": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "root_xform": {
+        "order": [
+          "xformOp:translate",
+          "xformOp:rotateXYZ",
+          "xformOp:scale"
+        ],
+        "ops": [
+          {
+            "op": "xformOp:translate",
+            "type": "UsdGeom.XformOp.TypeTranslate",
+            "value": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "op": "xformOp:rotateXYZ",
+            "type": "UsdGeom.XformOp.TypeRotateXYZ",
+            "value": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "op": "xformOp:scale",
+            "type": "UsdGeom.XformOp.TypeScale",
+            "value": [
+              1.0,
+              1.0,
+              1.0
+            ]
+          }
+        ]
+      },
+      "root_local_mesh_bounds_units": [
+        [
+          -64.9987678527832,
+          64.9987678527832
+        ],
+        [
+          -7.029526233673096,
+          7.029526233673096
+        ],
+        [
+          -61.331403732299805,
+          61.331403732299805
+        ]
+      ],
+      "root_local_mesh_bounds_if_root_scale_ignored_m": [
+        [
+          -0.649987678527832,
+          0.649987678527832
+        ],
+        [
+          -0.07029526233673096,
+          0.07029526233673096
+        ],
+        [
+          -0.613314037322998,
+          0.613314037322998
+        ]
+      ],
+      "meshes": [
+        {
+          "path": "/World/node_/mesh_",
+          "point_count": 31452,
+          "triangle_count": 10484
+        }
+      ],
+      "triangle_count": 10484
+    },
+    "M6 Hub Bolt.usd": {
+      "path": "assets/parts/M6 Hub Bolt.usd",
+      "stage_meters_per_unit": 0.01,
+      "up_axis": "Y",
+      "root_path": "/World",
+      "root_local_to_stage_matrix": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "root_xform": {
+        "order": [
+          "xformOp:translate",
+          "xformOp:rotateXYZ",
+          "xformOp:scale"
+        ],
+        "ops": [
+          {
+            "op": "xformOp:translate",
+            "type": "UsdGeom.XformOp.TypeTranslate",
+            "value": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "op": "xformOp:rotateXYZ",
+            "type": "UsdGeom.XformOp.TypeRotateXYZ",
+            "value": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "op": "xformOp:scale",
+            "type": "UsdGeom.XformOp.TypeScale",
+            "value": [
+              1.0,
+              1.0,
+              1.0
+            ]
+          }
+        ]
+      },
+      "root_local_mesh_bounds_units": [
+        [
+          -5.773503303527832,
+          5.773503303527832
+        ],
+        [
+          -13.07499885559082,
+          13.07499885559082
+        ],
+        [
+          -5.0,
+          5.0
+        ]
+      ],
+      "root_local_mesh_bounds_if_root_scale_ignored_m": [
+        [
+          -0.05773503303527832,
+          0.05773503303527832
+        ],
+        [
+          -0.1307499885559082,
+          0.1307499885559082
+        ],
+        [
+          -0.05,
+          0.05
+        ]
+      ],
+      "meshes": [
+        {
+          "path": "/World/node_/mesh_",
+          "point_count": 53718,
+          "triangle_count": 17906
+        }
+      ],
+      "triangle_count": 17906,
+      "estimated_y_axis_shank_diameter": {
+        "band_y": [
+          -9.152499198913574,
+          3.137999725341796
+        ],
+        "diameter_median_units": 5.883998153544683,
+        "diameter_p95_units": 5.8840011581604585,
+        "vertex_samples": 31580
+      },
+      "estimated_y_axis_shank_diameter_at_source_stage_m": {
+        "diameter_median_units": 0.05883998153544683,
+        "diameter_p95_units": 0.05884001158160459
+      }
+    }
+  },
+  "simple_room_scene": {
+    "path": "assets/simple_room_scene.usd",
+    "stage_meters_per_unit": 1.0,
+    "up_axis": "Z",
+    "instances": {
+      "/Root/Casing_Top": {
+        "name": "Casing_Top",
+        "world_matrix": [
+          [
+            0.0020000000949949026,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0020000000949949026,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0020000000949949026,
+            0.0
+          ],
+          [
+            -0.0993,
+            -0.9351,
+            -0.015599986602395435,
+            1.0
+          ]
+        ],
+        "world_translation": [
+          -0.0993,
+          -0.9351,
+          -0.015599986602395435
+        ],
+        "world_linear_basis_lengths": [
+          0.0020000000949949026,
+          0.0020000000949949026,
+          0.0020000000949949026
+        ],
+        "xform": {
+          "order": [
+            "xformOp:translate",
+            "xformOp:rotateXYZ",
+            "xformOp:scale"
+          ],
+          "ops": [
+            {
+              "op": "xformOp:translate",
+              "type": "UsdGeom.XformOp.TypeTranslate",
+              "value": [
+                -0.0993,
+                -0.9351,
+                -0.015599986602395435
+              ]
+            },
+            {
+              "op": "xformOp:rotateXYZ",
+              "type": "UsdGeom.XformOp.TypeRotateXYZ",
+              "value": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "op": "xformOp:scale",
+              "type": "UsdGeom.XformOp.TypeScale",
+              "value": [
+                0.0020000000949949026,
+                0.0020000000949949026,
+                0.0020000000949949026
+              ]
+            }
+          ]
+        },
+        "world_bounds_stage_units": [
+          [
+            -0.31933716560257125,
+            -1.2123670724956506,
+            -0.095
+          ],
+          [
+            0.12073716560257128,
+            -0.6578329275043495,
+            0.04029666827423278
+          ]
+        ],
+        "world_dimensions_m": [
+          0.4400743312051425,
+          0.554534144991301,
+          0.13529666827423278
+        ],
+        "world_bounds_m": [
+          [
+            -0.31933716560257125,
+            -1.2123670724956506,
+            -0.095
+          ],
+          [
+            0.12073716560257128,
+            -0.6578329275043495,
+            0.04029666827423278
+          ]
+        ]
+      },
+      "/Root/M6_Hub_Bolt_01_top": {
+        "name": "M6_Hub_Bolt_01_top",
+        "world_matrix": [
+          [
+            0.0020000000949949026,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0020000000949949026,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0020000000949949026,
+            0.0
+          ],
+          [
+            0.3216,
+            -0.9055,
+            -0.08499999952502549,
+            1.0
+          ]
+        ],
+        "world_translation": [
+          0.3216,
+          -0.9055,
+          -0.08499999952502549
+        ],
+        "world_linear_basis_lengths": [
+          0.0020000000949949026,
+          0.0020000000949949026,
+          0.0020000000949949026
+        ],
+        "xform": {
+          "order": [
+            "xformOp:translate",
+            "xformOp:translate:pivot",
+            "xformOp:rotateXYZ",
+            "xformOp:scale",
+            "!invert!xformOp:translate:pivot"
+          ],
+          "ops": [
+            {
+              "op": "xformOp:translate",
+              "type": "UsdGeom.XformOp.TypeTranslate",
+              "value": [
+                0.3216,
+                -0.9055,
+                -0.08499999952502549
+              ]
+            },
+            {
+              "op": "xformOp:translate:pivot",
+              "type": "UsdGeom.XformOp.TypeTranslate",
+              "value": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "op": "xformOp:rotateXYZ",
+              "type": "UsdGeom.XformOp.TypeRotateXYZ",
+              "value": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "op": "xformOp:scale",
+              "type": "UsdGeom.XformOp.TypeScale",
+              "value": [
+                0.0020000000949949026,
+                0.0020000000949949026,
+                0.0020000000949949026
+              ]
+            },
+            {
+              "op": "!invert!xformOp:translate:pivot",
+              "type": "UsdGeom.XformOp.TypeTranslate",
+              "value": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          ]
+        },
+        "world_bounds_stage_units": [
+          [
+            0.31005299284449095,
+            -0.9316499989532399,
+            -0.095
+          ],
+          [
+            0.33314700715550905,
+            -0.8793500010467601,
+            -0.07499999905005098
+          ]
+        ],
+        "world_dimensions_m": [
+          0.023094014311018096,
+          0.05229999790647977,
+          0.020000000949949026
+        ],
+        "world_bounds_m": [
+          [
+            0.31005299284449095,
+            -0.9316499989532399,
+            -0.095
+          ],
+          [
+            0.33314700715550905,
+            -0.8793500010467601,
+            -0.07499999905005098
+          ]
+        ]
+      },
+      "/Root/Hub_Cover_Output_Top": {
+        "name": "Hub_Cover_Output_Top",
+        "world_matrix": [
+          [
+            0.0020000000949949026,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            4.440892309431682e-19,
+            0.0020000000949949026,
+            0.0
+          ],
+          [
+            0.0,
+            -0.0020000000949949026,
+            4.440892309431682e-19,
+            0.0
+          ],
+          [
+            0.0865,
+            -1.3411,
+            -0.08094094686488462,
+            1.0
+          ]
+        ],
+        "world_translation": [
+          0.0865,
+          -1.3411,
+          -0.08094094686488462
+        ],
+        "world_linear_basis_lengths": [
+          0.0020000000949949026,
+          0.0020000000949949026,
+          0.0020000000949949026
+        ],
+        "xform": {
+          "order": [
+            "xformOp:translate",
+            "xformOp:rotateXYZ",
+            "xformOp:scale"
+          ],
+          "ops": [
+            {
+              "op": "xformOp:translate",
+              "type": "UsdGeom.XformOp.TypeTranslate",
+              "value": [
+                0.0865,
+                -1.3411,
+                -0.08094094686488462
+              ]
+            },
+            {
+              "op": "xformOp:rotateXYZ",
+              "type": "UsdGeom.XformOp.TypeRotateXYZ",
+              "value": [
+                90.0,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "op": "xformOp:scale",
+              "type": "UsdGeom.XformOp.TypeScale",
+              "value": [
+                0.0020000000949949026,
+                0.0020000000949949026,
+                0.0020000000949949026
+              ]
+            }
+          ]
+        },
+        "world_bounds_stage_units": [
+          [
+            -0.04349754188011806,
+            -1.4637628132907703,
+            -0.095
+          ],
+          [
+            0.216497541880118,
+            -1.2184371867092296,
+            -0.06688189372976924
+          ]
+        ],
+        "world_dimensions_m": [
+          0.25999508376023606,
+          0.24532562658154067,
+          0.028118106270230758
+        ],
+        "world_bounds_m": [
+          [
+            -0.04349754188011806,
+            -1.4637628132907703,
+            -0.095
+          ],
+          [
+            0.216497541880118,
+            -1.2184371867092296,
+            -0.06688189372976924
+          ]
+        ]
+      }
+    }
+  }
+}
